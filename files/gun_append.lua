@@ -15,6 +15,11 @@ local ADD = {
 	"damage_critical_chance", "damage_critical_multiplier", "explosion_radius", "explosion_damage_to_materials",
 	"knockback_force", "lifetime_add", "bounces", "gravity", "spread_degrees", "pattern_degrees", "physics_impulse_coeff",
 }
+-- The engine ignores negative damage of these types; only the healing type heals (vanilla's Healing bolt has
+-- damage_by_type healing = -0.35). So a flip that takes damage away goes to damage_healing_add instead: a spark bolt
+-- (3 damage) with a flipped Damage plus (+10) deals 3 and heals 10.
+local DAMAGE = { damage_projectile_add = true, damage_melee_add = true, damage_electricity_add = true,
+	damage_fire_add = true, damage_ice_add = true, damage_slice_add = true, damage_curse_add = true, damage_drill_add = true }
 -- multiplied by modifiers: x2.5 becomes x0.4
 local MUL = { "speed_multiplier", "child_speed_multiplier", "dampening" }
 -- Never flipped: cosmetics (screenshake, gore, blood, light), counts (lightning_count, trail and material amounts),
@@ -49,13 +54,21 @@ end
 
 -- applies every change made since snapshot `s` the other way round; true if anything was flipped
 local function flip_since(state, s)
-	local flipped = false
+	local flipped, heal = false, 0
 	for _, k in ipairs(ADD) do
 		local was, now = s[k], state[k]
 		if num(was) and num(now) and now ~= was then
-			state[k] = was - (now - was)
+			local v = was - (now - was)
+			if DAMAGE[k] and v < was then
+				heal = heal + (v - was)
+				v = was
+			end
+			state[k] = v
 			flipped = true
 		end
+	end
+	if heal ~= 0 then -- after the loop, which also flips the healing a modifier itself added
+		state.damage_healing_add = (state.damage_healing_add or 0) + heal
 	end
 	for _, k in ipairs(MUL) do
 		local was, now = s[k], state[k]

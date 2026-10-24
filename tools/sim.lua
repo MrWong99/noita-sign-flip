@@ -160,6 +160,8 @@ end
 local ADD = { "damage_projectile_add", "damage_electricity_add", "damage_explosion_add", "damage_ice_add",
 	"damage_critical_chance", "explosion_radius", "knockback_force", "lifetime_add", "bounces", "gravity",
 	"spread_degrees" }
+-- a flip that takes damage of these types away goes to damage_healing_add (files/gun_append.lua, DAMAGE)
+local DAMAGE = { damage_projectile_add = true, damage_electricity_add = true, damage_ice_add = true }
 -- depend on things the flipped cast changes on its own: the Sign flip card's mana cost, the pick, the frame number
 local SWEEP_SKIP = { SIGN_FLIP = true, RANDOM_MODIFIER = true, DAMAGE_RANDOM = true, DAMAGE_FOREVER = true }
 
@@ -177,15 +179,23 @@ for _, a in ipairs(actions) do
 				print("ERROR " .. tag .. " " .. tostring(ok1 and flip or plain))
 				break
 			end
-			local row, flips_any = {}, false
+			local row, flips_any, heal = {}, false, 0
 			for _, k in ipairs(ADD) do
 				local b, p = base.c[k], plain.c[k]
 				-- a modifier that clamps (Light shot: radius >= 0) is flipped by what it actually changed
 				if not near(p, b) then
-					check(tag, k, flip.c[k], 2 * b - p)
+					local want = 2 * b - p
+					if DAMAGE[k] and p > b then
+						heal, want = heal + (b - p), b
+					end
+					check(tag, k, flip.c[k], want)
 					row[#row + 1] = ("%s %+g->%+g"):format(k, p - b, flip.c[k] - b)
 					flips_any = true
 				end
+			end
+			check(tag, "damage_healing_add", flip.c.damage_healing_add, base.c.damage_healing_add + heal)
+			if heal ~= 0 then
+				row[#row + 1] = ("healing %+g"):format(heal)
 			end
 			for _, k in ipairs({ "speed_multiplier", "child_speed_multiplier" }) do
 				local b, p = base.c[k], plain.c[k]
@@ -235,64 +245,72 @@ end
 
 -- semantics ---------------------------------------------------------------------------------------------------------
 
-local dmg = base.c.damage_projectile_add
-local plus = cast({ "DAMAGE", "LIGHT_BULLET" }).c.damage_projectile_add - dmg -- +0.4
-local heavy = cast({ "HEAVY_SHOT", "LIGHT_BULLET" }).c.damage_projectile_add - dmg -- +1.75
+-- damage net of healing (a flip that takes damage away heals instead)
+local function net(state)
+	return state.damage_projectile_add + state.damage_healing_add
+end
+local dmg = net(base.c)
+local plus = net(cast({ "DAMAGE", "LIGHT_BULLET" }).c) - dmg -- +0.4
+local heavy = net(cast({ "HEAVY_SHOT", "LIGHT_BULLET" }).c) - dmg -- +1.75
 
-local r = cast({ "SIGN_FLIP", "SIGN_FLIP", "DAMAGE", "LIGHT_BULLET" })
-check("S1 two Sign flips cancel", "damage", r.c.damage_projectile_add, dmg + plus)
+local r = cast({ "SIGN_FLIP", "DAMAGE", "LIGHT_BULLET" })
+check("S0 flipped damage heals", "damage", r.c.damage_projectile_add, base.c.damage_projectile_add)
+check("S0", "healing", r.c.damage_healing_add, base.c.damage_healing_add - plus)
+
+r = cast({ "SIGN_FLIP", "SIGN_FLIP", "DAMAGE", "LIGHT_BULLET" })
+check("S1 two Sign flips cancel", "damage", net(r.c), dmg + plus)
 check("S1", "sf_negated", r.c.sf_negated, nil)
 
 r = cast({ "SIGN_FLIP", "DAMAGE", "SIGN_FLIP", "HEAVY_SHOT", "LIGHT_BULLET" })
-check("S2 each flips its next", "damage", r.c.damage_projectile_add, dmg - plus - heavy)
+check("S2 each flips its next", "damage", net(r.c), dmg - plus - heavy)
 check("S2", "speed", r.c.speed_multiplier, 1 / 0.3)
 check("S2", "sf_negated", r.c.sf_negated, "HEAVY_SHOT,DAMAGE,")
 
 r = cast({ "SIGN_FLIP", "SIGN_FLIP", "SIGN_FLIP", "DAMAGE", "LIGHT_BULLET" })
-check("S3 three Sign flips = one", "damage", r.c.damage_projectile_add, dmg - plus)
+check("S3 three Sign flips = one", "damage", net(r.c), dmg - plus)
 
 r = cast({ "SIGN_FLIP", "DAMAGE", "HEAVY_SHOT", "LIGHT_BULLET" })
-check("S4 only the next modifier", "damage", r.c.damage_projectile_add, dmg - plus + heavy)
+check("S4 only the next modifier", "damage", net(r.c), dmg - plus + heavy)
 
 r = cast({ "SIGN_FLIP", "BURST_2", "DAMAGE", "LIGHT_BULLET", "LIGHT_BULLET" })
-check("S5 through a multicast", "damage", r.c.damage_projectile_add, 2 * dmg - plus)
+check("S5 through a multicast", "damage", net(r.c), 2 * dmg - plus)
 r = cast({ "BURST_2", "SIGN_FLIP", "DAMAGE", "LIGHT_BULLET", "LIGHT_BULLET" })
-check("S5b inside a multicast", "damage", r.c.damage_projectile_add, 2 * dmg - plus)
+check("S5b inside a multicast", "damage", net(r.c), 2 * dmg - plus)
 r = cast({ "SIGN_FLIP", "LIGHT_BULLET", "DAMAGE", "LIGHT_BULLET" }, { per_round = 2 })
-check("S5c projectile in between", "damage", r.c.damage_projectile_add, 2 * dmg - plus)
+check("S5c projectile in between", "damage", net(r.c), 2 * dmg - plus)
 
 r = cast({ "SIGN_FLIP", "LIGHT_BULLET_TRIGGER", "DAMAGE", "LIGHT_BULLET" })
-check("S6 trigger payload not flipped", "payload damage", r.shots[1].state.damage_projectile_add, dmg + plus)
+check("S6 trigger payload not flipped", "payload damage", net(r.shots[1].state), dmg + plus)
 check("S6", "outer flip left unused", r.shots[#r.shots].state.sf_pending, 1)
 r = cast({ "LIGHT_BULLET_TRIGGER", "SIGN_FLIP", "DAMAGE", "LIGHT_BULLET" })
-check("S6b flip inside the payload", "payload damage", r.shots[1].state.damage_projectile_add, dmg - plus)
+check("S6b flip inside the payload", "payload damage", net(r.shots[1].state), dmg - plus)
 
 r = cast({ "DAMAGE", "LIGHT_BULLET" }, { always = { "SIGN_FLIP" } })
-check("S7 always-cast Sign flip", "damage", r.c.damage_projectile_add, dmg - plus)
+check("S7 always-cast Sign flip", "damage", net(r.c), dmg - plus)
 r = cast({ "SIGN_FLIP", "LIGHT_BULLET" }, { always = { "DAMAGE" } })
-check("S7b always-cast modifier plays first", "damage", r.c.damage_projectile_add, dmg + plus)
+check("S7b always-cast modifier plays first", "damage", net(r.c), dmg + plus)
 r = cast({ "SIGN_FLIP", "DAMAGE", "LIGHT_BULLET" }, { always = { "SIGN_FLIP" } })
-check("S7c always-cast + deck Sign flip cancel", "damage", r.c.damage_projectile_add, dmg + plus)
+check("S7c always-cast + deck Sign flip cancel", "damage", net(r.c), dmg + plus)
 
 r = cast({ "SIGN_FLIP", "RANDOM_MODIFIER", "LIGHT_BULLET" }, { pick = "DAMAGE" })
-check("S8 Random modifier's pick is flipped", "damage", r.c.damage_projectile_add, dmg - plus)
+check("S8 Random modifier's pick is flipped", "damage", net(r.c), dmg - plus)
 check("S8", "sf_negated", r.c.sf_negated, "DAMAGE,")
 r = cast({ "SIGN_FLIP", "RANDOM_MODIFIER", "DAMAGE", "LIGHT_BULLET" }, { pick = "SIGN_FLIP" })
-check("S8b Random modifier picks Sign flip: cancels", "damage", r.c.damage_projectile_add, dmg + plus)
+check("S8b Random modifier picks Sign flip: cancels", "damage", net(r.c), dmg + plus)
 r = cast({ "RANDOM_MODIFIER", "DAMAGE", "LIGHT_BULLET" }, { pick = "SIGN_FLIP" })
-check("S8c unflipped Random modifier picks Sign flip", "damage", r.c.damage_projectile_add, dmg - plus)
+check("S8c unflipped Random modifier picks Sign flip", "damage", net(r.c), dmg - plus)
 
 local orbit = cast({ "ORBIT_SHOT", "LIGHT_BULLET" })
 r = cast({ "SIGN_FLIP", "ORBIT_SHOT", "LIGHT_BULLET" })
 check("S9 change after drawing (Orbit shot)", "lifetime", r.c.lifetime_add, 2 * base.c.lifetime_add - orbit.c.lifetime_add)
-check("S9", "damage", r.c.damage_projectile_add, 2 * dmg - orbit.c.damage_projectile_add)
+check("S9", "damage", net(r.c), 2 * dmg - net(orbit.c))
 
 r = cast({ "SIGN_FLIP", "HOMING", "DAMAGE", "LIGHT_BULLET" })
-check("S10 nothing to flip: wasted", "damage", r.c.damage_projectile_add, dmg + plus)
+check("S10 nothing to flip: wasted", "damage", net(r.c), dmg + plus)
 check("S10", "sf_negated", r.c.sf_negated, nil)
 
 r = cast({ "SIGN_FLIP", "LIGHT_BULLET" })
-check("S11 no modifier after it", "damage", r.c.damage_projectile_add, dmg)
+check("S11 no modifier after it", "damage", net(r.c), dmg)
 
 local addmana = cast({ "MANA_REDUCE", "LIGHT_BULLET" })
 r = cast({ "SIGN_FLIP", "MANA_REDUCE", "LIGHT_BULLET" })
@@ -304,7 +322,7 @@ check("S12b setting none", "mana", r.mana, addmana.mana - SF_MANA)
 local m2d = cast({ "DAMAGE_FOREVER", "LIGHT_BULLET" })
 r = cast({ "SIGN_FLIP", "DAMAGE_FOREVER", "LIGHT_BULLET" })
 check("S13 Mana to damage, bonuses: mana use stays", "mana", r.mana, m2d.mana)
-check("S13", "damage", r.c.damage_projectile_add, dmg - 0.025 * (WAND_MANA - SF_MANA - 50))
+check("S13", "damage", net(r.c), dmg - 0.025 * (WAND_MANA - SF_MANA - 50))
 r = cast({ "SIGN_FLIP", "DAMAGE_FOREVER", "LIGHT_BULLET" }, { mode = "all" })
 check("S13b Mana to damage, all: hands out mana", "mana", r.mana, (WAND_MANA - SF_MANA) * 2 - 50 - 5)
 

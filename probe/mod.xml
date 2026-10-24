@@ -1,0 +1,7 @@
+<Mod
+    name="sign_flip probes"
+    description="Automated in-game probes for Sign Flip (docs/DESIGN.md). Dev only - run in an isolated prefix via tools/probe-run.sh."
+    request_no_api_restrictions="0"
+    is_game_mode="0"
+>
+</Mod>
