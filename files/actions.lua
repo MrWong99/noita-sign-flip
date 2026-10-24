@@ -3,7 +3,7 @@
 table.insert(actions, {
 	id = "SIGN_FLIP",
 	name = "Sign flip",
-	description = "Negates the next modifier: +damage becomes -damage, faster becomes slower, gravity pulls upwards",
+	description = "Negates the next modifier: damage it adds heals instead, faster becomes slower, gravity pulls upwards",
 	sprite = "mods/sign_flip/files/ui_gfx/sign_flip.png",
 	type = ACTION_TYPE_MODIFIER,
 	spawn_level = "2,3,4,5,6",

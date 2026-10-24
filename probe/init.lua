@@ -5,14 +5,16 @@
 
 local MOD = "mods/sign_flip_probe/"
 
+-- suite.txt (written by tools/probe-run.sh): line 1 suite ("main", "fi", "fi-first"), line 2 optional sweep ids, line 3
+-- the run's token. Without it this is not a probe run: do nothing at all (the probe rewrites the held wand).
+local ok_suite, SUITE_TEXT = pcall(ModTextFileGetContent, MOD .. "suite.txt")
+if not ok_suite or not SUITE_TEXT or SUITE_TEXT == "" then
+	print("sign_flip_probe: no suite.txt, not a probe run (tools/probe-run.sh): disabled")
+	return
+end
+
 ModMagicNumbersFileAdd(MOD .. "files/magic_numbers.xml") -- makes Lua print() reach logger.txt
 ModLuaFileAppend("data/scripts/gun/gun.lua", MOD .. "files/gun_append.lua")
-
--- suite.txt (written by tools/probe-run.sh): line 1 suite ("main", "fi"), line 2 optional sweep ids, line 3 run token
-local ok_suite, SUITE_TEXT = pcall(ModTextFileGetContent, MOD .. "suite.txt")
-if not ok_suite or not SUITE_TEXT then
-	SUITE_TEXT = "main"
-end
 local LINES = {}
 for line in (SUITE_TEXT .. "\n"):gmatch("([^\n]*)\n") do
 	LINES[#LINES + 1] = line
@@ -367,6 +369,8 @@ local SPEED_CHECK = { SPEED = true, LIGHT_SHOT = true, ENERGY_SHIELD_SHOT = true
 	HOMING_AREA = true }
 
 local sweep = {} -- id -> { plain, flip } shot states, for the Random modifier check
+-- swept modifiers whose parts also have an opposite (files/scripts/opposites_build.lua)
+local OPPOSITE_IDS = { FLY_UPWARDS = true, FLY_DOWNWARDS = true, FREEZE = true }
 
 local function sweep_one(id, base)
 	local plain = cast({ id, "LIGHT_BULLET" })
@@ -377,7 +381,12 @@ local function sweep_one(id, base)
 	local bad = {}
 	local b, p, f = base.root, plain.root, flip.root
 	local heal = 0
+	-- recorded for Field Imbue when a projectile number or part flipped (not for recoil, cast delay, recharge, mana)
+	local recorded = OPPOSITE_IDS[id] or false
 	for _, k in ipairs(SHOT_ADD) do
+		if k ~= "recoil" and not near(p[k], b[k]) then
+			recorded = true
+		end
 		if not near(p[k], b[k]) then
 			local want = 2 * b[k] - p[k]
 			if SHOT_DAMAGE[k] and p[k] > b[k] then
@@ -392,8 +401,11 @@ local function sweep_one(id, base)
 		bad[#bad + 1] = ("shot.damage_healing_add=%s(want %s)"):format(fmt(f.damage_healing_add), fmt(b.damage_healing_add + heal))
 	end
 	for _, k in ipairs({ "speed_multiplier", "child_speed_multiplier" }) do
-		if not near(p[k], b[k]) and p[k] ~= 0 and not near(f[k], b[k] * b[k] / p[k]) then
-			bad[#bad + 1] = ("shot.%s=%s(want %s)"):format(k, fmt(f[k]), fmt(b[k] * b[k] / p[k]))
+		if not near(p[k], b[k]) and p[k] ~= 0 then
+			recorded = true
+			if not near(f[k], b[k] * b[k] / p[k]) then
+				bad[#bad + 1] = ("shot.%s=%s(want %s)"):format(k, fmt(f[k]), fmt(b[k] * b[k] / p[k]))
+			end
 		end
 	end
 	for _, k in ipairs({ "fire_rate_wait", "reload" }) do
@@ -403,8 +415,8 @@ local function sweep_one(id, base)
 			bad[#bad + 1] = ("shot.%s=%s(want %s)"):format(k, fmt(f[k]), fmt(want))
 		end
 	end
-	if not result("SWEEP-SHOT " .. id, #bad == 0 and f.sf_negated == id .. ",", "sf_negated=" .. tostring(f.sf_negated),
-		table.concat(bad, " ")) then
+	if not result("SWEEP-SHOT " .. id, #bad == 0 and f.sf_negated == (recorded and id .. "," or nil),
+		"sf_negated=" .. tostring(f.sf_negated), table.concat(bad, " ")) then
 		return
 	end
 	-- The engine's view: does each bolt carry what the engine makes of its shot (the plain cast's bolt is checked the same
@@ -522,35 +534,138 @@ local function run_semantics()
 	r = cast({ "SIGN_FLIP", "DAMAGE", "LIGHT_BULLET" }, { always = { "SIGN_FLIP" } })
 	want("S7b always-cast + deck Sign flip cancel", damage_of(r), 0.4)
 	quiet_cleanup()
-	r = cast({ "SIGN_FLIP", "HOMING", "DAMAGE", "LIGHT_BULLET" })
-	want("S10 nothing to flip: wasted", damage_of(r), 0.4)
+	r = cast({ "SIGN_FLIP", "LIGHT", "DAMAGE", "LIGHT_BULLET" })
+	want("S10 nothing to flip (Light): wasted", damage_of(r), 0.4)
 	quiet_cleanup()
+end
+
+-- opposites: what flipped modifiers add (files/scripts/opposites_build.lua) -----------------------------------------
+
+local function homing_coeffs(e)
+	local out = {}
+	for _, h in ipairs(EntityGetComponentIncludingDisabled(e, "HomingComponent") or {}) do
+		out[#out + 1] = ComponentGetValue2(h, "homing_targeting_coeff")
+	end
+	return out
+end
+
+-- material converters on an entity, as "from>to" material names (not the ones that only put out fire)
+local function converters(e)
+	local out = {}
+	for _, comp in ipairs(EntityGetComponentIncludingDisabled(e, "MagicConvertMaterialComponent") or {}) do
+		if not ComponentGetValue2(comp, "extinguish_fire") then
+			out[#out + 1] = CellFactory_GetName(ComponentGetValue2(comp, "from_material")) .. ">"
+				.. CellFactory_GetName(ComponentGetValue2(comp, "to_material"))
+		end
+	end
+	table.sort(out)
+	return table.concat(out, ",")
+end
+
+-- does it put out burning material around it (vanilla Ice ball's extinguish_fire converter)?
+local function extinguishes(e)
+	for _, comp in ipairs(EntityGetComponentIncludingDisabled(e, "MagicConvertMaterialComponent") or {}) do
+		if ComponentGetValue2(comp, "extinguish_fire") then
+			return true
+		end
+	end
+	return false
+end
+
+local function run_opposites()
+	local r = cast({ "SIGN_FLIP", "HOMING", "LIGHT_BULLET" })
+	local h = r.bolts[1] and homing_coeffs(r.bolts[1]) or {}
+	result("O1 flipped Homing steers away", #h == 1 and near(h[1], -130), "homing_targeting_coeff=" .. table.concat(h, ","),
+		"sf_negated=" .. tostring(r.root.sf_negated))
+	quiet_cleanup()
+	r = cast({ "SIGN_FLIP", "ANTI_HOMING", "LIGHT_BULLET" })
+	h = r.bolts[1] and homing_coeffs(r.bolts[1]) or {}
+	result("O2 flipped Anti homing homes", #h == 1 and near(h[1], 130), "homing_targeting_coeff=" .. table.concat(h, ","))
+	quiet_cleanup()
+	-- behaviour: a sheep above the bolt's path; homing turns towards it, anti homing away
+	for _, cards in ipairs({ { "HOMING", "LIGHT_BULLET" }, { "SIGN_FLIP", "HOMING", "LIGHT_BULLET" } }) do
+		local sheep = spawn_sheep(PX + 170, PY - 60)
+		wait(3)
+		r = cast(cards)
+		local vy
+		for _ = 1, 15 do
+			wait(1)
+			local vc = r.bolts[1] and EntityGetIsAlive(r.bolts[1]) and EntityGetFirstComponentIncludingDisabled(r.bolts[1], "VelocityComponent")
+			if vc then
+				vy = select(2, ComponentGetValue2(vc, "mVelocity"))
+			end
+		end
+		log("O1b " .. table.concat(cards, ","), "vertical speed after 15 frames=" .. fmt(vy), "(sheep is above: < 0 towards it)")
+		kill(sheep)
+		quiet_cleanup()
+	end
+	r = cast({ "SIGN_FLIP", "WATER_TO_POISON", "LIGHT_BULLET" })
+	local conv = r.bolts[1] and converters(r.bolts[1]) or ""
+	result("O3 flipped Water to poison runs backwards", conv == "poison>water", "converters=" .. conv)
+	quiet_cleanup()
+	for _, id in ipairs({ "FIRE_TRAIL", "BURN_TRAIL" }) do
+		local plain = cast({ id, "LIGHT_BULLET" })
+		local pe = plain.bolts[1] and ComponentGetValue2(EntityGetFirstComponentIncludingDisabled(plain.bolts[1], "ProjectileComponent"),
+			"damage_game_effect_entities") or "?"
+		quiet_cleanup()
+		r = cast({ "SIGN_FLIP", id, "LIGHT_BULLET" })
+		local b = r.bolts[1]
+		conv = b and converters(b) or ""
+		local fe = b and ComponentGetValue2(EntityGetFirstComponentIncludingDisabled(b, "ProjectileComponent"), "damage_game_effect_entities") or "?"
+		local ext = b and extinguishes(b) or false
+		result("O4 flipped " .. id .. " eats fire", conv == "fire>air" and ext and not fe:find("on_fire", 1, true)
+			and pe:find("on_fire", 1, true) ~= nil, "converters=" .. conv, "extinguishes=" .. tostring(ext), "on-hit plain=" .. pe,
+			"flipped=" .. fe)
+		quiet_cleanup()
+	end
+	-- Fly upwards: its script turns the bolt on frame 20; flipped it turns down (and soon hits the ground)
+	local vys = {}
+	for i, cards in ipairs({ { "FLY_UPWARDS", "LIGHT_BULLET" }, { "SIGN_FLIP", "FLY_UPWARDS", "LIGHT_BULLET" } }) do
+		r = cast(cards)
+		local b = r.bolts[1]
+		for _ = 1, 24 do
+			wait(1)
+			local vc = b and EntityGetIsAlive(b) and EntityGetFirstComponentIncludingDisabled(b, "VelocityComponent")
+			if vc then
+				vys[i] = select(2, ComponentGetValue2(vc, "mVelocity"))
+			end
+		end
+		quiet_cleanup()
+	end
+	-- the scripts set the vertical speed to twice the bolt's speed: far beyond what gravity adds in 24 frames (~80)
+	result("O6 flipped Fly upwards flies down", vys[1] and vys[2] and vys[1] < -300 and vys[2] > 300,
+		"vertical speed after 24 frames: plain " .. fmt(vys[1]), "flipped " .. fmt(vys[2]), "(< 0 is up)")
 end
 
 -- Random modifier: whatever it picks must come out exactly like the sweep's flipped cast of that modifier
 local RANDOM_KEYS = { "damage_projectile_add", "speed_multiplier", "lifetime_add", "bounces", "gravity", "explosion_radius",
 	"spread_degrees", "damage_ice_add", "damage_electricity_add" }
+-- The pick is forced (probe/files/gun_append.lua wraps Random), so a pick that isn't flipped fails the check.
 local function run_random()
-	local seen = 0
-	for i = 1, 16 do
+	for _, id in ipairs({ "DAMAGE", "SPEED", "ORBIT_SHOT", "GRAVITY", "BOUNCE" }) do
+		GlobalsSetValue("sfprobe_pick", id)
 		local r = cast({ "SIGN_FLIP", "RANDOM_MODIFIER", "LIGHT_BULLET" })
-		local id = (r.root.sf_negated or ""):match("^([%w_]+),$")
-		local ref = id and sweep[id]
-		if ref then
-			local bad = {}
-			for _, k in ipairs(RANDOM_KEYS) do
-				if not near(r.root[k], ref.flip[k]) then
-					bad[#bad + 1] = ("%s=%s(want %s)"):format(k, fmt(r.root[k]), fmt(ref.flip[k]))
-				end
+		local ref = sweep[id]
+		local bad = {}
+		for _, k in ipairs(RANDOM_KEYS) do
+			if not ref or not near(r.root[k], ref.flip[k]) then
+				bad[#bad + 1] = ("%s=%s(want %s)"):format(k, fmt(r.root[k]), fmt(ref and ref.flip[k]))
 			end
-			seen = seen + 1
-			result("S8 Random modifier picked " .. id, #bad == 0, table.concat(bad, " "))
-		else
-			log("S8 Random modifier shot " .. i, "sf_negated=" .. tostring(r.root.sf_negated), "(pick without a sweep entry)")
 		end
+		result("S8 Random modifier picks " .. id, #bad == 0 and r.root.sf_negated == id .. ",",
+			"sf_negated=" .. tostring(r.root.sf_negated), table.concat(bad, " "))
 		quiet_cleanup()
 	end
-	log("S8 Random modifier: " .. seen .. "/16 picks checked against the sweep")
+	GlobalsSetValue("sfprobe_pick", "HOMING")
+	local r = cast({ "SIGN_FLIP", "RANDOM_MODIFIER", "LIGHT_BULLET" })
+	local h = r.bolts[1] and homing_coeffs(r.bolts[1]) or {}
+	result("S8b Random modifier picks Homing: anti homing", #h == 1 and near(h[1], -130), "homing=" .. table.concat(h, ","))
+	quiet_cleanup()
+	GlobalsSetValue("sfprobe_pick", "SIGN_FLIP")
+	r = cast({ "SIGN_FLIP", "RANDOM_MODIFIER", "DAMAGE", "LIGHT_BULLET" })
+	result("S8c Random modifier picks Sign flip: cancels", near(damage_of(r), 0.4), "damage=" .. fmt(damage_of(r)))
+	quiet_cleanup()
+	GlobalsSetValue("sfprobe_pick", "")
 end
 
 -- wand economy: the "wand_numbers" setting, switched at runtime (read on every flip)
@@ -587,7 +702,8 @@ local function run_economy()
 			"mana " .. fmt(p.root.mana) .. " -> " .. fmt(f.root.mana), "(wand after: " .. fmt(p.mana_after) .. " -> " .. fmt(f.mana_after) .. ")")
 		p, f = both({ "DAMAGE_FOREVER", "LIGHT_BULLET" }, mode, { mana = 5000, charge = 0 })
 		flips = mode == "all"
-		result("E4 Mana to damage, " .. mode, near(f.root.mana, flips and (2 * (5000 - 10) - 50 - 5) or p.root.mana)
+		-- "all": the spend turns into a gain, capped at the mana the shot started with (5000), then the Spark bolt's 5
+		result("E4 Mana to damage, " .. mode, near(f.root.mana, flips and (5000 - 5) or p.root.mana)
 			and near(damage_of(f), -0.025 * (5000 - 10 - 50)),
 			"mana " .. fmt(p.root.mana) .. " -> " .. fmt(f.root.mana), "damage " .. fmt(damage_of(p)) .. " -> "
 			.. fmt(damage_of(f)), "(wand after: " .. fmt(f.mana_after) .. ")")
@@ -610,15 +726,19 @@ local function track(e, frames)
 end
 
 local function run_behaviour()
-	-- negative damage on a hurt sheep
-	for _, cards in ipairs({ { "DAMAGE", "LIGHT_BULLET" }, { "SIGN_FLIP", "DAMAGE", "LIGHT_BULLET" },
-		{ "SIGN_FLIP", "HEAVY_SHOT", "LIGHT_BULLET" } }) do
+	-- negative damage on a hurt sheep: a flipped Damage plus / Heavy shot heals it (net of the bolt's own 0.12)
+	for _, test in ipairs({ { 0.48, "DAMAGE", "LIGHT_BULLET" }, { 1.28, "SIGN_FLIP", "DAMAGE", "LIGHT_BULLET" },
+		{ 2.63, "SIGN_FLIP", "HEAVY_SHOT", "LIGHT_BULLET" } }) do
+		local cards = { unpack(test, 2) }
 		local sheep = spawn_sheep(PX + 150, PY, 1.0)
 		wait(3)
 		local r = cast(cards, { dx = 150, dy = 0 })
 		wait(30)
-		log("B1 hp of a sheep at 1.0/40 hit by " .. table.concat(cards, ","), "bolt damage=" .. fmt(r.stats[1] and r.stats[1].damage),
-			"healing=" .. fmt(r.stats[1] and r.stats[1].heal), "hp after=" .. fmt(hp(sheep)))
+		-- a critical hit (5 % for a Spark bolt) multiplies the result, so only the direction is asserted
+		local after = hp(sheep)
+		result("B1 sheep at 1.0/40 hit by " .. table.concat(cards, ","), (test[1] > 1) == (after > 1.0) and after ~= 1.0,
+			"bolt damage=" .. fmt(r.stats[1] and r.stats[1].damage), "healing=" .. fmt(r.stats[1] and r.stats[1].heal),
+			"hp after=" .. fmt(after), "(expected about " .. test[1] .. ")")
 		kill(sheep)
 		quiet_cleanup()
 	end
@@ -738,7 +858,7 @@ local function bolt_through()
 		before = now
 		wait(1)
 	end
-	return before, after
+	return before, after, bolt
 end
 
 local function run_fi()
@@ -750,7 +870,8 @@ local function run_fi()
 		{ "F1 flipped Damage plus field heals", { "FIELD_IMBUE", "SIGN_FLIP", "DAMAGE", "BERSERK_FIELD" }, "-DAMAGE", 0.12, -0.4 },
 		{ "F2 plain Damage plus field", { "FIELD_IMBUE", "DAMAGE", "BERSERK_FIELD" }, "DAMAGE", 0.52, 0 },
 		{ "F3 flipped and plain Damage plus", { "FIELD_IMBUE", "SIGN_FLIP", "DAMAGE", "DAMAGE", "BERSERK_FIELD" }, "-DAMAGE,DAMAGE", 0.52, -0.4 },
-		{ "F5 flip wasted on Homing", { "FIELD_IMBUE", "SIGN_FLIP", "HOMING", "BERSERK_FIELD" }, "HOMING" },
+		{ "F5 flip wasted on Light", { "FIELD_IMBUE", "SIGN_FLIP", "LIGHT", "BERSERK_FIELD" }, "LIGHT" },
+		{ "F7 flipped Homing field", { "FIELD_IMBUE", "SIGN_FLIP", "HOMING", "BERSERK_FIELD" }, "-HOMING" },
 	}
 	for _, case in ipairs(cases) do
 		local field, payload = cast_field(case[2])
@@ -763,13 +884,20 @@ local function run_fi()
 			end
 			table.sort(sorted)
 			payload = table.concat(sorted, ",")
-			local _, after = bolt_through()
+			local _, after, bolt = bolt_through()
 			local ok = payload == case[3] and after ~= nil
 			if ok and case[4] then
 				ok = near(after.damage, case[4]) and near(after.heal, case[5])
 			end
+			local h = bolt and EntityGetIsAlive(bolt) and homing_coeffs(bolt) or {}
+			-- the circle itself carries none of the modifier's pieces (it must not steer away from enemies)
+			local field_homing = #homing_coeffs(field)
+			if ok and case[3] == "-HOMING" then
+				ok = #h == 1 and near(h[1], -130) and field_homing == 0
+			end
 			result(case[1], ok, "payload=" .. tostring(payload), "(want " .. case[3] .. ")", "bolt after field: damage=" ..
-				fmt(after and after.damage), "healing=" .. fmt(after and after.heal), "fi_mods=" .. tostring(after and after.fi_mods))
+				fmt(after and after.damage), "healing=" .. fmt(after and after.heal), "homing=" .. table.concat(h, ","),
+				"field HomingComponents=" .. field_homing, "fi_mods=" .. tostring(after and after.fi_mods))
 			kill(field)
 		end
 		quiet_cleanup()
@@ -787,6 +915,39 @@ local function run_fi()
 	else
 		result("F4 flipped Speed up field slows", false, "no field")
 	end
+	quiet_cleanup()
+	-- a flipped Water to poison field runs poison -> water over its whole circle
+	field, payload = cast_field({ "FIELD_IMBUE", "SIGN_FLIP", "WATER_TO_POISON", "BERSERK_FIELD" })
+	local conv = field and converters(field) or ""
+	result("F8 flipped converter field", payload == "-WATER_TO_POISON" and conv == "poison>water",
+		"payload=" .. tostring(payload), "field converters=" .. conv, "(want one poison>water)")
+	kill(field)
+	quiet_cleanup()
+	-- a flipped Fire trail field eats fire over its circle and hands the eater to bolts, without fire on hit
+	field, payload = cast_field({ "FIELD_IMBUE", "SIGN_FLIP", "FIRE_TRAIL", "BERSERK_FIELD" })
+	conv = field and converters(field) or ""
+	local _, after, bolt = bolt_through()
+	local bconv = bolt and EntityGetIsAlive(bolt) and converters(bolt) or ""
+	local fx = bolt and EntityGetIsAlive(bolt) and ComponentGetValue2(EntityGetFirstComponentIncludingDisabled(bolt, "ProjectileComponent"),
+		"damage_game_effect_entities") or "?"
+	local fext, bext = field and extinguishes(field) or false, bolt and EntityGetIsAlive(bolt) and extinguishes(bolt) or false
+	result("F9 flipped Fire trail field", payload == "-FIRE_TRAIL" and conv == "fire>air" and bconv == "fire>air" and fext
+		and bext and not fx:find("on_fire", 1, true), "payload=" .. tostring(payload), "field converters=" .. conv,
+		"extinguishes field/bolt=" .. tostring(fext) .. "/" .. tostring(bext), "bolt converters=" .. bconv, "bolt on-hit=" .. fx,
+		"fi_mods=" .. tostring(after and after.fi_mods))
+	kill(field)
+	quiet_cleanup()
+	-- a flip passes over Field resonance: "Sign flip -> Field resonance -> Damage plus" flips Damage plus too
+	field, payload = cast_field({ "SIGN_FLIP", "FIELD_IMBUE", "DAMAGE", "BERSERK_FIELD" })
+	result("F10 flip passes over Field resonance", payload == "-DAMAGE", "payload=" .. tostring(payload), "(want -DAMAGE)")
+	kill(field)
+	quiet_cleanup()
+	-- ... also when Random modifier picks Field resonance (forced pick, probe/files/gun_append.lua)
+	GlobalsSetValue("sfprobe_pick", "FIELD_IMBUE")
+	local r = cast({ "SIGN_FLIP", "RANDOM_MODIFIER", "DAMAGE", "LIGHT_BULLET" })
+	GlobalsSetValue("sfprobe_pick", "")
+	result("F11 Random modifier's Field resonance passes the flip on", near(damage_of(r), -0.4), "damage=" .. fmt(damage_of(r)),
+		"sf_negated=" .. tostring(r.root.sf_negated))
 	quiet_cleanup()
 	-- a bolt in the same multicast as the imbuing field gets the shot's (flipped) gravity back on its first frame
 	equip({ "BURST_2", "FIELD_IMBUE", "SIGN_FLIP", "GRAVITY", "LIGHT_BULLET", "BERSERK_FIELD" })
@@ -831,6 +992,7 @@ local function run_all()
 		run_sweep()
 		if next(ONLY) == nil then
 			run_semantics()
+			run_opposites()
 			run_random()
 			run_economy()
 			run_behaviour()
@@ -885,6 +1047,7 @@ function OnWorldPostUpdate()
 		local inv = EntityGetFirstComponentIncludingDisabled(player, "Inventory2Component")
 		current_wand = ComponentGetValue2(inv, "mActualActiveItem")
 		if current_wand == 0 or not ability() then
+			log("START token=" .. TOKEN, "suite=" .. SUITE) -- so tools/probe-run.sh sees this run's ABORT
 			log("ABORT player holds no wand")
 			log("DONE")
 			return

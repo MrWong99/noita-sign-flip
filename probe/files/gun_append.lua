@@ -1,3 +1,17 @@
+-- sign_flip probe: makes Random modifier pick the action named in the global "sfprobe_pick" (probe/init.lua's S8)
+local sfprobe_random = Random
+function Random(a, b)
+	local want = GlobalsGetValue("sfprobe_pick", "")
+	if want ~= "" and a == 1 and b == #actions then
+		for i, act in ipairs(actions) do
+			if act.id == want then
+				return i
+			end
+		end
+	end
+	return sfprobe_random(a, b)
+end
+
 -- sign_flip probe: records each shot's final state, as the wand code hands it to the engine, in the global
 -- "sfprobe_shots" (one line per registered shot; a trigger's payload comes before its outer shot)
 local sfprobe_register = register_action

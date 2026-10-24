@@ -12,11 +12,19 @@ set -euo pipefail
 STEAM="$HOME/.local/share/Steam"
 NOITA="$STEAM/steamapps/common/Noita"
 PROTON="${PROTON:-/usr/share/steam/compatibilitytools.d/proton-cachyos-native/proton}"
-PREFIX="${PREFIX:-$HOME/noita-dev/prefix-signflip}"
+PREFIX="$(realpath -m -- "${PREFIX:-$HOME/noita-dev/prefix-signflip}")"
 TIMEOUT="${TIMEOUT:-1200}"
 OUT="${OUT:-$HOME/noita-dev/signflip-probe.txt}"
 OUT_LOG="${OUT_LOG:-$HOME/noita-dev/signflip-logger.txt}"
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+FI_REPO="${FI_REPO:-$HOME/field_imbue}"
+# the probe writes saves, a mod list and a config into the prefix: never into your own Noita's (Steam's compatdata)
+case "$PREFIX/" in
+"$(realpath -m -- "$STEAM")"/*)
+	echo "PREFIX must not be inside Steam ($PREFIX)" >&2
+	exit 2
+	;;
+esac
 export STEAM_COMPAT_CLIENT_INSTALL_PATH="$STEAM" STEAM_COMPAT_DATA_PATH="$PREFIX" SteamAppId=881100 SteamGameId=881100
 
 # processes started in this prefix: Proton gives them WINEPREFIX=<prefix>/pfx/ (with the trailing slash)
@@ -47,12 +55,33 @@ if [ -n "$(prefix_pids)" ]; then
 fi
 
 SUITE="${1:-main}"
+case "$SUITE" in
+main | fi | fi-first) ;;
+*)
+	echo "unknown suite '$SUITE' (main, fi, fi-first)" >&2
+	exit 2
+	;;
+esac
 TOKEN="$(date +%s)-$$"
 mkdir -p "$PREFIX"
-ln -sfn "$REPO/probe" "$NOITA/mods/sign_flip_probe"
-if [ ! -e "$NOITA/mods/sign_flip" ]; then
-	ln -s "$REPO" "$NOITA/mods/sign_flip"
+# Noita/mods/<name> must be this checkout, or the probe would test whatever is installed there
+link_mod() { # <mod folder name> <checkout>
+	local dst="$NOITA/mods/$1"
+	if [ ! -e "$dst" ] && [ ! -L "$dst" ]; then
+		ln -s "$2" "$dst"
+	fi
+	if [ "$(readlink -f "$dst")" != "$(readlink -f "$2")" ]; then
+		echo "$dst is not $2: refusing to probe something else" >&2
+		exit 2
+	fi
+}
+link_mod sign_flip "$REPO"
+if [ "$SUITE" != main ]; then
+	link_mod field_imbue "$FI_REPO"
 fi
+# The probe mod is only linked while a run lasts: it rewrites the held wand, so it must never be enabled in a real run.
+ln -sfn "$REPO/probe" "$NOITA/mods/sign_flip_probe"
+trap 'rm -f "$NOITA/mods/sign_flip_probe" "$REPO/probe/suite.txt"' EXIT
 printf '%s\n%s\n%s\n' "$SUITE" "${2:-}" "$TOKEN" >"$REPO/probe/suite.txt"
 if [ ! -d "$PREFIX/pfx" ]; then
 	"$PROTON" run cmd.exe /c exit || true
@@ -61,10 +90,13 @@ SAVE="$PREFIX/pfx/drive_c/users/steamuser/AppData/LocalLow/Nolla_Games_Noita/sav
 # Start every run from an empty save00. Probe instances are killed, not quit, so a leftover autosave would bring up the
 # "Looks like the game crashed? Restore" dialog. Only ever touches this probe prefix.
 case "$SAVE" in
-*/noita-dev/prefix-signflip/*)
+"$HOME"/noita-dev/*)
 	if [ -e "$SAVE" ]; then
 		gio trash "$SAVE"
 	fi
+	;;
+*)
+	echo "not clearing $SAVE (only prefixes under ~/noita-dev are cleared)" >&2
 	;;
 esac
 mkdir -p "$SAVE"
@@ -101,8 +133,10 @@ run_lines() {
 	awk -v t="SFPROBE START token=$TOKEN" 'index($0, t) { on = 1 } on' "$LOG" 2>/dev/null || true
 }
 status=timeout
-for _ in $(seq 1 $((TIMEOUT / 5))); do
+waited=0
+while [ "$waited" -lt "$TIMEOUT" ]; do
 	sleep 5
+	waited=$((waited + 5))
 	lines="$(run_lines)"
 	if grep -q 'SFPROBE DONE' <<<"$lines"; then
 		status=done
@@ -110,6 +144,10 @@ for _ in $(seq 1 $((TIMEOUT / 5))); do
 	fi
 	if grep -q 'SFPROBE ERROR' <<<"$lines"; then
 		status=error
+		break
+	fi
+	if [ "$waited" -ge 60 ] && [ -z "$(prefix_pids)" ]; then
+		status=died # Noita exited or never started
 		break
 	fi
 done
@@ -124,6 +162,10 @@ if [ -n "$pids" ]; then
 	if [ -n "$pids" ]; then
 		kill -9 $pids 2>/dev/null || true
 	fi
+fi
+# finishing is not passing: an ABORT or a failed check makes the run fail too
+if [ "$status" = done ] && { grep -q 'SFPROBE ABORT' "$OUT" || ! grep -qE 'SFPROBE SUMMARY [0-9]+ passed, 0 failed' "$OUT"; }; then
+	status=failed
 fi
 echo "probe $status: $(wc -l <"$OUT") lines in $OUT"
 grep -E 'FAIL|ERROR|SUMMARY|ABORT' "$OUT" || true
