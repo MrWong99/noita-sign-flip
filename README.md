@@ -16,6 +16,7 @@ A Noita mod that adds **Sign flip**, a modifier card that negates the next modif
 | Sign flip → Sign flip → Damage plus | a plain Damage plus: a flipped Sign flip cancels |
 
 ## Install
+- **Steam Workshop:** subscribe to [Sign Flip](https://steamcommunity.com/sharedfiles/filedetails/?id=3826087249).
 - **Manual:** download `sign_flip-<version>.zip` from
   [Releases](https://github.com/MrWong99/noita-sign-flip/releases) and extract it into `Noita/mods/`, so that you
   get `Noita/mods/sign_flip/mod.xml`. Then enable **Sign Flip** in the Mods menu.
