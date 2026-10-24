@@ -1,0 +1,7 @@
+<Mod
+    name="Sign Flip"
+    description="Adds Sign flip: a modifier that negates the next modifier. Damage plus takes damage away, Speed up slows down, gravity turns into anti-gravity. Works with Entangled Worlds and Field Imbue."
+    request_no_api_restrictions="0"
+    is_game_mode="0"
+>
+</Mod>

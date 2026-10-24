@@ -1,0 +1,12 @@
+# release zips (built locally)
+dist/
+# written by tools/probe-run.sh / tools/ew-2p.sh for each run
+probe/suite.txt
+__pycache__/
+*.pyc
+# core dumps from crashed shells
+core.*
+# editor / agent folders
+.claude/
+.vscode/
+.idea/
