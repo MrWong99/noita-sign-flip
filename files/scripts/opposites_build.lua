@@ -18,6 +18,25 @@ local PAIRS = {
 	["data/entities/misc/larpa_downwards.xml"] = "data/entities/misc/larpa_upwards.xml",
 }
 
+-- The spell flip (files/gun_append.lua, run_spell_flipped): Black hole <-> White hole, as files. Each pair differs only
+-- in the sign of its pull and in looks.
+local HOLES = {
+	["data/entities/projectiles/deck/black_hole.xml"] = "data/entities/projectiles/deck/white_hole.xml",
+	["data/entities/projectiles/deck/black_hole_big.xml"] = "data/entities/projectiles/deck/white_hole_big.xml",
+	["data/entities/projectiles/deck/black_hole_giga.xml"] = "data/entities/projectiles/deck/white_hole_giga.xml",
+}
+-- The implode marker for one spell's file: merged into the whole shot like any extra entity, it only acts on
+-- projectiles made from that file (files/scripts/implode.lua). Flipped explosion modifiers use the unfiltered
+-- files/entities/implode.xml.
+local IMPLODE = "mods/sign_flip/files/entities/implode.xml"
+local SPELL_MARKER = '<Entity>\n\t<VariableStorageComponent _tags="sf_implode" name="sf_implode" value_string="%s" />\n'
+	.. '\t<LuaComponent _tags="sf_implode" script_source_file="mods/sign_flip/files/scripts/implode.lua" '
+	.. 'execute_on_added="1" execute_every_n_frame="-1" />\n'
+	.. '\t<LuaComponent _tags="sf_implode" script_source_file="mods/sign_flip/files/scripts/implode_arm.lua" '
+	.. 'execute_every_n_frame="1" remove_after_executed="1" />\n'
+	.. '\t<LuaComponent _tags="sf_implode" script_source_file="mods/sign_flip/files/scripts/implode_death.lua" '
+	.. 'execute_on_removed="1" execute_every_n_frame="-1" />\n</Entity>\n'
+
 local ENGINE_STUBS = { "EntityLoad", "BeginProjectile", "EndProjectile", "RegisterProjectile", "RegisterGunAction",
 	"RegisterGunShotEffects", "BeginTriggerTimer", "BeginTriggerHitWorld", "BeginTriggerDeath", "EndTrigger",
 	"SetProjectileConfigs", "StartReload", "ActionUsesRemainingChanged", "ActionUsed", "LogAction", "OnActionPlayed",
@@ -72,6 +91,43 @@ local function evaluate(a)
 		return {}, {}
 	end
 	return added(base.extra_entities, c.extra_entities), added(base.trail_material, c.trail_material)
+end
+
+-- the entity files a projectile spell adds; spells that pick one at random (Firework, Summon egg) run with a few seeds
+local function spell_files(a)
+	local files, known, seed = {}, {}, 0
+	Reflection_RegisterProjectile = function(f)
+		if type(f) == "string" and not known[f] then
+			known[f] = true
+			files[#files + 1] = f
+		end
+	end
+	GameGetFrameNum = function()
+		return seed * 37
+	end
+	-- the i-th run picks the i-th option wherever the spell rolls (the backup/restore after build() puts these back)
+	SetRandomSeed = function() end
+	Random = function(a, b)
+		if not a then
+			return ((seed - 1) % 8) / 8
+		elseif not b then
+			a, b = 1, a
+		end
+		return a + (seed - 1) % (b - a + 1)
+	end
+	for i = 1, 8 do
+		seed = i
+		c = {}
+		ConfigGunActionInfo_Init(c)
+		shot_effects = {}
+		ConfigGunShotEffects_Init(shot_effects)
+		current_reload_time, mana = 0, 1000
+		reflecting, dont_draw_actions = true, true
+		pcall(a.action, 1, 1)
+		reflecting, dont_draw_actions = false, false
+	end
+	Reflection_RegisterProjectile = function() end
+	return files
 end
 
 -- MagicConvertMaterialComponent from one material to another: run it backwards. Anything else (a material tag, a
@@ -227,6 +283,24 @@ local function build()
 	for m, file in pairs(O.eat) do
 		if not file then
 			O.eat[m] = nil
+		end
+	end
+
+	-- the spell flip: hole pairs, and an implode marker for every other file a projectile spell adds
+	O.holes, O.spell, O.implode = {}, {}, IMPLODE
+	for black, white in pairs(HOLES) do
+		if ModDoesFileExist(black) and ModDoesFileExist(white) then
+			O.holes[black], O.holes[white] = white, black
+		end
+	end
+	for _, a in ipairs(actions or {}) do
+		if a.type == ACTION_TYPE_PROJECTILE or a.type == ACTION_TYPE_STATIC_PROJECTILE or a.type == ACTION_TYPE_MATERIAL then
+			for _, f in ipairs(spell_files(a)) do
+				if not O.holes[f] and not O.spell[f] and f:match('^[^"<>&]+$') then
+					O.spell[f] = GEN .. "implode/" .. f
+					ModTextFileSetContent(O.spell[f], SPELL_MARKER:format(f))
+				end
+			end
 		end
 	end
 end

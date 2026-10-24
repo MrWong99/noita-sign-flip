@@ -6,6 +6,7 @@ a plain Spark bolt.
 - `healing`: damage moved to the healing type, because the engine ignores negative damage.
 - `parts`: the extra entities the flipped cast carries. `flipped X` is X with its homing reversed or its converters run
   backwards; `eater of M` takes material M away around the projectile.
+- `implode marker`: the explosion turns into an implosion (pull for 0.25 s, then 3x the damage in 1/3 of the radius).
 - Cast delay and recharge only flip when they were a bonus; `mana` is Add mana's gain.
 
 Not in the table: Sign flip itself, Random modifier (its pick is flipped), Random damage and Mana to damage (their
@@ -69,8 +70,8 @@ numbers depend on the frame and on the wand's mana; they flip like any other).
 | `SPEED` | `speed_multiplier x2.5 → x0.4` |
 | `ACCELERATING_SHOT` | `speed_multiplier x0.32 → x3.125` · `cast_delay +8 → +8` · `recoil +10 → -10` |
 | `DECELERATING_SHOT` | `speed_multiplier x1.68 → x0.5952` · `cast_delay -8 → +8` · `recoil -10 → +10` |
-| `EXPLOSIVE_PROJECTILE` | `damage_explosion_add +0.2 → -0.2` · `explosion_radius +15 → -15` · `speed_multiplier x0.75 → x1.333` · `cast_delay +40 → +40` · `recoil +30 → -30` |
-| `CLUSTERMOD` | `damage_explosion_add +0.2 → -0.2` · `explosion_radius +4 → -4` · `cast_delay +20 → +20` · `recoil +10 → -10` |
+| `EXPLOSIVE_PROJECTILE` | `damage_explosion_add +0.2 → +0.2` · `explosion_radius +15 → +15` · `speed_multiplier x0.75 → x1.333` · `cast_delay +40 → +40` · `recoil +30 → -30` · `parts=implode marker` |
+| `CLUSTERMOD` | `damage_explosion_add +0.2 → +0.2` · `explosion_radius +4 → +4` · `cast_delay +20 → +20` · `recoil +10 → -10` · `parts=clusterbomb.xml, implode marker` |
 | `WATER_TO_POISON` | `cast_delay +10 → +10` · `parts=flipped water_to_poison.xml, tinyspark_purple.xml` |
 | `BLOOD_TO_ACID` | `cast_delay +10 → +10` · `parts=flipped blood_to_acid.xml, tinyspark_red.xml` |
 | `LAVA_TO_BLOOD` | `cast_delay +10 → +10` · `parts=flipped lava_to_blood.xml, tinyspark_orange.xml` |

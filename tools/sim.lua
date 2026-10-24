@@ -139,6 +139,8 @@ local function copy(t)
 	end
 	return o
 end
+local spawned = {} -- entity files of the cast, in order (BeginProjectile)
+function BeginProjectile(f) spawned[#spawned + 1] = f end
 function BeginTriggerTimer() depth = depth + 1 end
 BeginTriggerHitWorld, BeginTriggerDeath = BeginTriggerTimer, BeginTriggerTimer
 function EndTrigger() depth = depth - 1 end
@@ -210,6 +212,7 @@ local WAND_DELAY, WAND_RELOAD, WAND_MANA, SF_MANA = 10, 20, 1000, 10
 local function cast(cards, opts)
 	opts = opts or {}
 	shots, reload_frames, recoil, depth = {}, nil, nil, 0
+	spawned = {}
 	settings["sign_flip.wand_numbers"] = opts.mode
 	force_pick = opts.pick
 	_clear_deck(false)
@@ -228,7 +231,8 @@ local function cast(cards, opts)
 	end
 	_draw_actions_for_shot(true)
 	local root = shots[#shots]
-	return { c = root and root.state or {}, shots = shots, mana = mana, reload = reload_frames, recoil = recoil }
+	return { c = root and root.state or {}, shots = shots, mana = mana, reload = reload_frames, recoil = recoil,
+		spawned = spawned }
 end
 
 -- checks ------------------------------------------------------------------------------------------------------------
@@ -260,7 +264,9 @@ local ADD = { "damage_projectile_add", "damage_electricity_add", "damage_explosi
 -- a flip that takes damage of these types away goes to damage_healing_add (files/gun_append.lua, DAMAGE)
 local DAMAGE = { damage_projectile_add = true, damage_electricity_add = true, damage_ice_add = true }
 -- depend on things the flipped cast changes on its own: the Sign flip card's mana cost, the pick, the frame number
-local SWEEP_SKIP = { SIGN_FLIP = true, RANDOM_MODIFIER = true, DAMAGE_RANDOM = true, DAMAGE_FOREVER = true }
+local SWEEP_SKIP = { SIGN_FLIP = true, RANDOM_MODIFIER = true, DAMAGE_RANDOM = true, DAMAGE_FOREVER = true,
+	FIELD_IMBUE = true }
+local IMPLODE = "mods/sign_flip/files/entities/implode.xml"
 
 -- every vanilla modifier: [SIGN_FLIP, X, LIGHT_BULLET] against [X, LIGHT_BULLET] and [LIGHT_BULLET]
 local base = cast({ "LIGHT_BULLET" })
@@ -278,12 +284,19 @@ for _, a in ipairs(actions) do
 			end
 			-- recorded for Field Imbue: projectile numbers or parts flipped (not cast delay, recharge, mana, recoil)
 			local row, flips_any, heal = {}, false, 0
+			-- an explosion the flip would make negative is an implosion: its numbers stay, the shot gets the marker
+			local dr = plain.c.explosion_radius - base.c.explosion_radius
+			local dd = plain.c.damage_explosion_add - base.c.damage_explosion_add
+			local implosion = dr > 0 or (dr == 0 and dd > 0)
+			check(tag, "implode marker", entry(flip.c.extra_entities, IMPLODE), implosion)
 			for _, k in ipairs(ADD) do
 				local b, p = base.c[k], plain.c[k]
 				-- a modifier that clamps (Light shot: radius >= 0) is flipped by what it actually changed
 				if not near(p, b) then
 					local want = 2 * b - p
-					if DAMAGE[k] and p > b then
+					if implosion and (k == "explosion_radius" or k == "damage_explosion_add") then
+						want = p
+					elseif DAMAGE[k] and p > b then
 						heal, want = heal + (b - p), b
 					end
 					check(tag, k, flip.c[k], want)
@@ -331,7 +344,8 @@ for _, a in ipairs(actions) do
 				flips_any = true
 				local e = {}
 				for f in flip.c.extra_entities:sub(#base.c.extra_entities + 1):gmatch("[^,]+") do
-					e[#e + 1] = (f:gsub("^mods/sign_flip/files/gen/", "gen:"):gsub("data/entities/misc/", ""))
+					e[#e + 1] = (f:gsub("^mods/sign_flip/files/entities/implode%.xml", "implode marker")
+						:gsub("^mods/sign_flip/files/gen/", "gen:"):gsub("data/entities/misc/", ""))
 				end
 				row[#row + 1] = "parts=" .. table.concat(e, ", ")
 				if flip.c.trail_material ~= plain.c.trail_material then
@@ -365,6 +379,7 @@ a plain Spark bolt.
 - `healing`: damage moved to the healing type, because the engine ignores negative damage.
 - `parts`: the extra entities the flipped cast carries. `flipped X` is X with its homing reversed or its converters run
   backwards; `eater of M` takes material M away around the projectile.
+- `implode marker`: the explosion turns into an implosion (pull for 0.25 s, then 3x the damage in 1/3 of the radius).
 - Cast delay and recharge only flip when they were a bonus; `mana` is Add mana's gain.
 
 Not in the table: Sign flip itself, Random modifier (its pick is flipped), Random damage and Mana to damage (their
@@ -411,11 +426,11 @@ check("S5 through a multicast", "damage", net(r.c), 2 * dmg - plus)
 r = cast({ "BURST_2", "SIGN_FLIP", "DAMAGE", "LIGHT_BULLET", "LIGHT_BULLET" })
 check("S5b inside a multicast", "damage", net(r.c), 2 * dmg - plus)
 r = cast({ "SIGN_FLIP", "LIGHT_BULLET", "DAMAGE", "LIGHT_BULLET" }, { per_round = 2 })
-check("S5c projectile in between", "damage", net(r.c), 2 * dmg - plus)
+check("S5c the Spark bolt right after it takes the flip", "damage", net(r.c), 2 * dmg + plus)
 
 r = cast({ "SIGN_FLIP", "LIGHT_BULLET_TRIGGER", "DAMAGE", "LIGHT_BULLET" })
 check("S6 trigger payload not flipped", "payload damage", net(r.shots[1].state), dmg + plus)
-check("S6", "outer flip left unused", r.shots[#r.shots].state.sf_pending, 1)
+check("S6", "the trigger bolt took the flip", r.shots[#r.shots].state.sf_pending, 0)
 r = cast({ "LIGHT_BULLET_TRIGGER", "SIGN_FLIP", "DAMAGE", "LIGHT_BULLET" })
 check("S6b flip inside the payload", "payload damage", net(r.shots[1].state), dmg - plus)
 
@@ -444,7 +459,7 @@ check("S10 nothing to flip: wasted", "damage", net(r.c), dmg + plus)
 check("S10", "sf_negated", r.c.sf_negated, nil)
 
 r = cast({ "SIGN_FLIP", "LIGHT_BULLET" })
-check("S11 no modifier after it", "damage", net(r.c), dmg)
+check("S11 a spell after it: its numbers stay", "damage", net(r.c), dmg)
 
 local addmana = cast({ "MANA_REDUCE", "LIGHT_BULLET" })
 r = cast({ "SIGN_FLIP", "MANA_REDUCE", "LIGHT_BULLET" })
@@ -472,7 +487,7 @@ if ORDER:find("fi", 1, true) then
 	check("S14", "sf_negated", r.c.sf_negated, "DAMAGE,")
 	check("S14", "field part kept", entry(r.c.extra_entities, FIELD), true)
 	r = cast({ "SIGN_FLIP", "FIELD_IMBUE", "LIGHT_BULLET" })
-	check("S14b nothing after it: the flip stays pending", "sf_pending", r.c.sf_pending, 1)
+	check("S14b the Spark bolt after Field resonance takes the flip", "sf_pending", r.c.sf_pending, 0)
 	check("S14b", "sf_negated", r.c.sf_negated, nil)
 	r = cast({ "SIGN_FLIP", "RANDOM_MODIFIER", "DAMAGE", "LIGHT_BULLET" }, { pick = "FIELD_IMBUE" })
 	check("S14c Random modifier picks Field resonance: hands the flip on", "damage", net(r.c), dmg - plus)
@@ -554,6 +569,71 @@ spark.action = spark_action
 r = cast({ "SIGN_FLIP", "DAMAGE", "LIGHT_BULLET" })
 check("S16c casts after the errors", "healing", r.c.damage_healing_add, base.c.damage_healing_add - plus)
 check("S16c", "spark's own crit", r.c.damage_critical_chance, base.c.damage_critical_chance)
+
+-- the spell flip: the projectile spell right after a Sign flip takes the flip (files/gun_append.lua, run_spell_flipped)
+if OPP then
+	local DECK = "data/entities/projectiles/deck/"
+	local function has_file(list, f)
+		for _, x in ipairs(list) do
+			if x == f then
+				return true
+			end
+		end
+		return false
+	end
+	r = cast({ "BLACK_HOLE" })
+	check("S17 plain Black hole", "spawned", r.spawned[1], DECK .. "black_hole.xml")
+	r = cast({ "SIGN_FLIP", "BLACK_HOLE" })
+	check("S17 flipped Black hole is a White hole", "spawned", r.spawned[1], DECK .. "white_hole.xml")
+	check("S17", "flip used", r.c.sf_pending, 0)
+	r = cast({ "SIGN_FLIP", "WHITE_HOLE_BIG" })
+	check("S17b flipped big White hole", "spawned", r.spawned[1], DECK .. "black_hole_big.xml")
+	r = cast({ "SIGN_FLIP", "BLACK_HOLE_GIGA" })
+	check("S17b flipped giga Black hole", "spawned", r.spawned[1], DECK .. "white_hole_giga.xml")
+	r = cast({ "SIGN_FLIP", "BLACK_HOLE_DEATH_TRIGGER", "BLACK_HOLE" })
+	check("S17c flipped death-trigger hole", "carrier", r.spawned[1], DECK .. "white_hole.xml")
+	check("S17c", "its payload stays", r.spawned[2], DECK .. "black_hole.xml")
+	r = cast({ "SIGN_FLIP", "RANDOM_PROJECTILE" }, { pick = "BLACK_HOLE" })
+	check("S17d Random projectile's pick is flipped", "spawned", r.spawned[1], DECK .. "white_hole.xml")
+	r = cast({ "BLACK_HOLE" }, { always = { "SIGN_FLIP" } })
+	check("S17e always-cast Sign flip flips the first spell", "spawned", r.spawned[1], DECK .. "white_hole.xml")
+	r = cast({ "SIGN_FLIP", "BURST_2", "BLACK_HOLE", "LIGHT_BULLET" })
+	check("S17f a multicast in between: the hole stays", "spawned", r.spawned[1], DECK .. "black_hole.xml")
+	check("S17f", "the flip waits for a modifier", r.c.sf_pending, 1)
+	r = cast({ "SIGN_FLIP", "SIGN_FLIP", "BLACK_HOLE" })
+	check("S17g two Sign flips cancel", "spawned", r.spawned[1], DECK .. "black_hole.xml")
+	-- Add trigger replays a Sign flip without drawing and spawns the next card's projectile without its action: the
+	-- flip must not stay fresh for a later spell of the shot
+	r = cast({ "ADD_TRIGGER", "SIGN_FLIP", "BLACK_HOLE", "LIGHT_BULLET", "BLACK_HOLE" }, { per_round = 2 })
+	check("S17h a Sign flip replayed by Add trigger", "later hole stays", r.spawned[#r.spawned], DECK .. "black_hole.xml")
+	check("S17h", "no marker", r.c.extra_entities:find("gen/implode/", 1, true) == nil, true)
+	-- a spell's own explosion implodes: its file's marker goes into the shot, nothing for the payload
+	local bolt = DECK .. "light_bullet.xml"
+	check("S18 every projectile file has a marker", "light_bullet", OPP.spell[bolt], "mods/sign_flip/files/gen/implode/" .. bolt)
+	r = cast({ "SIGN_FLIP", "LIGHT_BULLET" })
+	check("S18 flipped Spark bolt: marker in the shot", "marker", entry(r.c.extra_entities, OPP.spell[bolt]), true)
+	check("S18", "not the modifier marker", entry(r.c.extra_entities, IMPLODE), false)
+	r = cast({ "SIGN_FLIP", "LIGHT_BULLET_TRIGGER", "LIGHT_BULLET" })
+	local trig = r.spawned[1]
+	check("S18b flipped trigger bolt", "marker", entry(r.shots[#r.shots].state.extra_entities, OPP.spell[trig] or "?"), true)
+	check("S18b", "payload untouched", entry(r.shots[1].state.extra_entities, OPP.spell[bolt]), false)
+	r = cast({ "SIGN_FLIP", "BLACK_HOLE" })
+	check("S18c a swapped hole gets no marker", "extras", r.c.extra_entities:find("gen/implode/", 1, true) == nil, true)
+	-- a flipped explosion modifier: its explosion stays and every projectile of the shot implodes
+	local ep = cast({ "EXPLOSIVE_PROJECTILE", "LIGHT_BULLET" })
+	r = cast({ "SIGN_FLIP", "EXPLOSIVE_PROJECTILE", "LIGHT_BULLET" })
+	check("S19 flipped Explosive projectile", "radius kept", r.c.explosion_radius, ep.c.explosion_radius)
+	check("S19", "explosion damage kept", r.c.damage_explosion_add, ep.c.damage_explosion_add)
+	check("S19", "implode marker", entry(r.c.extra_entities, IMPLODE), true)
+	check("S19", "speed still flipped", r.c.speed_multiplier, 1 / 0.75)
+	check("S19", "recorded", r.c.sf_negated, "EXPLOSIVE_PROJECTILE,")
+	r = cast({ "SIGN_FLIP", "EXPLOSION_TINY", "LIGHT_BULLET" })
+	check("S19b flipped Explosive tiny grows instead", "radius", r.c.explosion_radius, 30)
+	check("S19b", "no implosion", entry(r.c.extra_entities, IMPLODE), false)
+	if not has_file(r.spawned, bolt) then
+		check("S19b", "spark spawned", false, true)
+	end
+end
 
 -- opposites (files/scripts/opposites_build.lua) -----------------------------------------------------------------------
 

@@ -26,6 +26,8 @@ this: in the two-peer harness, scripted shots don't reach the other peer.
 | **W5 fire eater** | Sign flip → Fire trail → Spark bolt | puts out fire along its path, leaves no fire |
 | **W6 cancel** | Sign flip → Sign flip → Damage plus → Spark bolt | a plain Damage plus bolt |
 | **W7 drain** | Sign flip → Add mana → Spark bolt | wand mana drops ~45 per cast (Sign flip 10, Spark bolt 5, the drain 30) instead of rising |
+| **W9 white hole** | Sign flip → Black hole | a White hole (pushes things away) |
+| **W10 implosion** | Sign flip → Explosive projectile → Spark bolt | where the bolt dies, things are pulled in for a moment, then a small, strong blast |
 | **W8 reverse** | Sign flip → Water to poison → Spark bolt | turns poison back into water around the bolt |
 | **Fire / poison** | Fire trail → Spark bolt; Water to poison → Spark bolt | to make fire and poison for W5 / W8 |
 
@@ -39,6 +41,8 @@ this: in the two-peer harness, scripted shots don't reach the other peer.
 | 5 | Turn EW friendly fire **on**. A first hits B 3–4 times with a plain Damage plus → Spark bolt (13 each), so B is below full health. Then A hits B with W1 a few times while B watches their health. | B's health goes **up** by about 7 per W1 hit (3 damage, 10 healing), never above full. A sees the same. Turn friendly fire off again. |
 | 6 | A fires W6 at an enemy. | It takes damage like a normal Damage plus bolt: the two Sign flips cancel. |
 | 7 | A casts W7 a few times (A watches the wand's mana bar). | The mana bar drops each cast instead of filling. No error text. |
+| 7b | A casts W9 near enemies. | The same White hole on both screens, pushing things away. |
+| 7c | A fires W10 into a group of enemies on the ground. | On both screens: enemies get pulled together, then one small blast; the crater looks the same for both players. |
 
 ## Part B: with Field Imbue
 Field wands, cards left to right; B shoots a plain Spark bolt through **A's** circle.

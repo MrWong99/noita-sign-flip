@@ -63,13 +63,26 @@ local function snapshot(state)
 	return s
 end
 
--- Applies every change made since snapshot `s` the other way round. True if a projectile number was flipped (cast
--- delay, recharge, mana and recoil are flipped too, but don't count: Field Imbue only cares about the projectile).
-local function flip_since(state, s)
+-- A flip that would make an explosion negative turns it into an implosion instead (decided with the user): the numbers
+-- the modifier added stay, and the projectiles get the implode marker (files/entities/implode.xml). That is the case
+-- when the modifier made the explosion bigger, or stronger without changing its size.
+local function implodes(s, state)
+	local dr = (state.explosion_radius or 0) - (s.explosion_radius or 0)
+	local dd = (state.damage_explosion_add or 0) - (s.damage_explosion_add or 0)
+	return dr > 0 or (dr == 0 and dd > 0)
+end
+
+-- Applies every change made since snapshot `s` the other way round. Returns whether a projectile number was flipped
+-- (cast delay, recharge, mana and recoil are flipped too, but don't count: Field Imbue only cares about the
+-- projectile), and whether the explosion became an implosion.
+local function flip_since(state, s, can_implode)
 	local flipped, heal = false, 0
+	local implosion = can_implode and implodes(s, state)
 	for _, k in ipairs(ADD) do
 		local was, now = s[k], state[k]
-		if num(was) and num(now) and now ~= was then
+		if implosion and (k == "explosion_radius" or k == "damage_explosion_add") then
+			flipped = true -- kept: the implosion uses them
+		elseif num(was) and num(now) and now ~= was then
 			local v = was - (now - was)
 			if DAMAGE[k] and v < was then
 				heal = heal + (v - was)
@@ -109,7 +122,7 @@ local function flip_since(state, s)
 	if num(was) and num(now) and now ~= was then -- a flipped Recoil pushes forwards
 		shot_effects.recoil_knockback = was - (now - was)
 	end
-	return flipped
+	return flipped, implosion
 end
 
 -- Add mana's bonus is its negative mana cost, which draw_action paid out before the action ran
@@ -193,9 +206,9 @@ end
 
 -- Runs a modifier that takes a pending flip. Both draw functions are hooked, so a modifier that draws with
 -- draw_action directly is measured the same way as one that calls draw_actions.
-local function run_flipped(state, id, action, ...)
+local function run_flipped(state, id, fresh, action, ...)
 	flip_card_mana(id)
-	local frame = { id = id, s = snapshot(state) } -- after flip_card_mana: that drain is not the modifier's own change
+	local frame = { id = id, s = snapshot(state), fresh = fresh } -- after flip_card_mana: that drain is not the modifier's own change
 	local real_draw, real_one, outer = draw_actions, draw_action, open
 	local flipped, dead = false, false -- flipped: anything that matters to the projectile (numbers or opposites)
 	local function flip()
@@ -205,8 +218,12 @@ local function run_flipped(state, id, action, ...)
 			dead = true
 			return
 		end
-		local numbers = flip_since(state, frame.s)
+		local O = get_opposites()
+		local numbers, implosion = flip_since(state, frame.s, O and O.implode ~= nil)
 		local opposite = opposites_since(state, frame.s)
+		if implosion then
+			state.extra_entities = state.extra_entities .. O.implode .. ","
+		end
 		flipped = flipped or numbers or opposite
 	end
 	local hook, hook_one
@@ -267,6 +284,59 @@ local function sign_flip(state)
 	-- a Sign flip right after another one is the modifier that one flips: the two cancel out
 	local n = state.sf_pending or 0
 	state.sf_pending = n > 0 and n - 1 or 1
+	-- until the next card plays, a projectile spell can still take the flip (run_spell_flipped)
+	state.sf_fresh = n == 0 or nil
+end
+
+-- The projectile spell played right after a Sign flip takes the flip (decided with the user), even when it has nothing
+-- to flip: a Black hole becomes a White hole and back (the files are swapped as the spell adds them), and the spell's
+-- own explosion becomes an implosion. The implode marker for each file it adds goes into the shot; the marker only
+-- acts on projectiles made from that file (files/scripts/implode.lua), so the shot's other spells keep exploding.
+local SPAWNERS = { "add_projectile", "add_projectile_trigger_timer", "add_projectile_trigger_hit_world",
+	"add_projectile_trigger_death" }
+local function run_spell_flipped(state, action, ...)
+	local O = get_opposites() or {}
+	local real, hooks, files = {}, {}, {}
+	for i, name in ipairs(SPAWNERS) do
+		real[i] = _G[name]
+	end
+	local function set(list)
+		for i, name in ipairs(SPAWNERS) do
+			_G[name] = list[i]
+		end
+	end
+	for i in ipairs(SPAWNERS) do
+		hooks[i] = function(file, ...)
+			local hole = O.holes and O.holes[file]
+			if hole then
+				file = hole
+			elseif not files[file] then
+				files[file] = true
+				files[#files + 1] = file
+			end
+			-- a trigger draws its payload inside: that is another shot, so it sees the real functions
+			set(real)
+			local r = { pcall(real[i], file, ...) }
+			set(hooks)
+			if not r[1] then
+				error(r[2], 0)
+			end
+			return unpack(r, 2, table.maxn(r))
+		end
+	end
+	set(hooks)
+	local result = { pcall(action, ...) }
+	set(real)
+	if not result[1] then
+		error(result[2], 0)
+	end
+	for _, file in ipairs(files) do
+		local marker = O.spell and O.spell[file]
+		if marker then
+			state.extra_entities = state.extra_entities .. marker .. ","
+		end
+	end
+	return unpack(result, 2, table.maxn(result))
 end
 
 -- Pass straight through while reflecting (spell tooltips, Entangled Worlds' action_fix, Field Imbue's recipe builder)
@@ -287,8 +357,9 @@ for _, a in ipairs(actions or {}) do
 			-- (decided with the user): "Sign flip -> Field resonance -> X" flips X, like "Field resonance -> Sign flip -> X".
 			a.action = function(...)
 				if not reflecting and c and still_open() then
-					open.pass = true -- Random modifier picked it: hand the flip on as well
+					open.pass = true -- Random modifier picked it: hand the flip on as well, still fresh if it was
 					c.sf_pending = (c.sf_pending or 0) + 1
+					c.sf_fresh = open.fresh
 				end
 				return action(...)
 			end
@@ -298,6 +369,8 @@ for _, a in ipairs(actions or {}) do
 				if reflecting or not c then
 					return action(...)
 				end
+				local fresh = c.sf_fresh
+				c.sf_fresh = nil
 				if still_open() then
 					open.id = id -- run directly by the flipped modifier (Random modifier's pick): this one is flipped
 					return action(...)
@@ -307,7 +380,36 @@ for _, a in ipairs(actions or {}) do
 					return action(...)
 				end
 				c.sf_pending = n - 1
-				return run_flipped(c, id, action, ...)
+				return run_flipped(c, id, fresh, action, ...)
+			end
+			a.sf_wrapped = true
+		elseif a.type == ACTION_TYPE_PROJECTILE or a.type == ACTION_TYPE_STATIC_PROJECTILE
+			or a.type == ACTION_TYPE_MATERIAL then
+			a.action = function(...)
+				if reflecting or not c then
+					return action(...)
+				end
+				local fresh, n = c.sf_fresh, c.sf_pending or 0
+				c.sf_fresh = nil
+				if not fresh or n <= 0 then
+					return action(...)
+				end
+				c.sf_pending = n - 1
+				return run_spell_flipped(c, action, ...)
+			end
+			a.sf_wrapped = true
+		else
+			-- any other card (multicast, trigger adders, ...) in between: the flip waits for the next modifier again
+			a.action = function(...)
+				if reflecting or not c then
+					return action(...)
+				end
+				local shot = c
+				shot.sf_fresh = nil
+				local r = { action(...) }
+				-- a Sign flip it replayed without drawing (Add trigger, Omega, Divide by) is in front of no spell either
+				shot.sf_fresh = nil
+				return unpack(r, 1, table.maxn(r))
 			end
 			a.sf_wrapped = true
 		end

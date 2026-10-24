@@ -14,6 +14,8 @@ A Noita mod that adds **Sign flip**, a modifier card that negates the next modif
 | Sign flip → Fire trail → … | the bolt takes fire away along its path and puts out what burns, instead of leaving fire |
 | Sign flip → Fly upwards → … | flies downwards |
 | Sign flip → Sign flip → Damage plus | a plain Damage plus: a flipped Sign flip cancels |
+| Sign flip → Black hole | a White hole (and back; all sizes) |
+| Sign flip → Bomb, or Sign flip → Explosive projectile → … | an **implosion**: it pulls things in for 0.25 s, then explodes with 3× the damage in ⅓ of the radius |
 
 ## Install
 - **Steam Workshop:** subscribe to [Sign Flip](https://steamcommunity.com/sharedfiles/filedetails/?id=3826087249).
@@ -33,6 +35,13 @@ A Noita mod that adds **Sign flip**, a modifier card that negates the next modif
 - **Copy spells** (Divide by, Duplicate, Mu, Omega, …) replay cards one by one, and every replay counts:
   - `Sign flip → Divide by 2 → Damage plus` flips only the first of its Damage plus plays;
   - a copy spell that replays the Sign flip card itself cancels the flip.
+- **Spells.** When the card right after Sign flip is a projectile spell, that spell takes the flip: a Black hole
+  becomes a White hole (and back), and the spell's own explosion becomes an implosion. Its direct-hit damage stays.
+  A spell with neither uses the flip up. A multicast or other card in between: the flip waits for the next modifier.
+- **Implosions.** An explosion that a flip would make negative implodes instead: when the projectile dies, things
+  within 1.5× its explosion radius are pulled in for 0.25 s (no terrain is eaten), then it explodes with 3× the
+  damage in ⅓ of the radius. That is a flipped spell's own explosion, and a flipped Explosive projectile or Clustermod
+  (every projectile of that cast). A flipped Remove explosion or Explosive tiny makes the explosion bigger instead.
 - **Nothing to flip.** A next modifier with nothing to flip (curses, orbits, Light, …) uses the flip up.
 - **Numbers.** Numbers a modifier adds are negated. Numbers it multiplies get the reciprocal factor.
 - **Healing.** Damage that a flip takes away **heals** instead. The engine ignores negative damage, so it goes to the
@@ -65,7 +74,7 @@ A Noita mod that adds **Sign flip**, a modifier card that negates the next modif
 - **Entangled Worlds**: everything happens in the wand code, which every peer replays deterministically. Every player
   needs the same version and the same setting.
 - **[Field Imbue](https://github.com/MrWong99/noita-field-imbue)** ([Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3825663162)),
-  0.3.0 or newer. A circle cast with Field resonance hands out the flipped modifier:
+  0.3.1 or newer. A circle cast with Field resonance hands out the flipped modifier:
   - a Sign flip → Damage plus circle heals the bolts' targets;
   - a Sign flip → Homing circle makes bolts flee enemies;
   - a Sign flip → Fire trail circle puts out fire over its area.
