@@ -1,8 +1,8 @@
 # sign_flip: design and findings
 
 Mod id **sign_flip**, published name **Sign Flip**. Target: Noita build "Jan 25 2025" (modding API 12), together with
-Entangled Worlds (EW, `quant.ew`, 1.6.6 installed) and Field Imbue (`field_imbue`, 0.3.0+, the release with the
-integration in §4). Started 2026-10-24. Field Imbue's `docs/RESEARCH.md` §2 (wand pipeline) and §4 (EW sync) apply here
+Entangled Worlds (EW, `quant.ew`, 1.6.6 installed) and Field Imbue (`field_imbue`, 0.3.1+, the release with the
+integration in §4 including implosions). Started 2026-10-24. Field Imbue's `docs/RESEARCH.md` §2 (wand pipeline) and §4 (EW sync) apply here
 unchanged.
 
 ## 1. Decisions (asked and answered 2026-10-24)
@@ -11,12 +11,13 @@ unchanged.
 |---|---|---|
 | 1 | Scope | A Sign flip flips **the next modifier** after it. If that modifier is another Sign flip, the two cancel: `Sign flip → Sign flip → Damage plus` = plain Damage plus, while `Sign flip → Damage plus → Sign flip → Heavy shot` = both negated. It must work for multicasts too. |
 | 1b | Next modifier has nothing to flip | Find creative opposites (§3); if there is none, the flip is used up ("wasted"). |
-| 1c | Sign flip right in front of a projectile spell | Flip the spell itself: its own damage turns into healing, Black hole ↔ White hole. **Not built yet**: next step after milestone 1. Until then the flip waits for the next modifier in the cast. |
+| 1c | Sign flip right in front of a projectile spell (2026-10-24, second round) | That spell takes the flip: Black hole ↔ White hole (all sizes), and its own explosion becomes an implosion (8). Its direct-hit damage stays. A spell with neither uses the flip up. A multicast or any other card in between: the flip waits for the next modifier, as before. |
 | 2 | Multipliers | Reciprocal: Speed up ×2.5 → ×0.4. |
 | 3 | Negative results | **Negative damage heals; no clamps.** The engine has its own limits (§5). |
 | 4 | Cast delay, recharge, mana | A **setting** (`wand_numbers`, new-game scope): `bonuses` (default) flips only changes that helped the wand, `all` flips everything, `none` never touches them. |
 | 5 | The card | Mid-tier: mana 10, no cast delay, price 150, spawns in levels 2–6 at 0.3/0.4/0.4/0.4/0.3, a 16×16 ± icon. |
 | 6 | Creative opposites | All four proposed: Homing ↔ anti homing, converters run backwards, trails eat their material, up ↔ down swaps. |
+| 8 | Negative explosions (the user's idea) | **Implosions**: when a flip would make an explosion negative, the projectile instead pulls things in for 0.25 s (within 1.5× its explosion radius, no terrain eaten), then explodes with 3× the damage in ⅓ of the radius. For a flipped spell's own explosion and for flipped explosion modifiers (Explosive projectile, Clustermod: every projectile of that cast). |
 | 7 | `Sign flip → Field resonance → X` (raised by the review) | A flip **passes over** Field Imbue's Field resonance to the next modifier, so both orders flip X. That includes Random modifier picking Field resonance. |
 
 **From the review, not a user decision.** A flip never *creates* mana beyond what the cast started with. The engine
@@ -64,6 +65,26 @@ appended to `data/scripts/gun/gun.lua`:
   table per shot, and keys the engine doesn't know never reach it.
 - **Pass-through** while `reflecting` (spell tooltips, EW's `action_fix`, Field Imbue's recipe builder) and when no flip
   is pending.
+
+**Spell flip** (`run_spell_flipped`). A new flip is "fresh" until the next card plays (Field resonance passes over it).
+A projectile, static-projectile or material spell entered while a flip is fresh takes it. While it runs, its
+`add_projectile*` calls are hooked: hole files are swapped (the builder's `holes`), every other file is noted and its
+implode marker (`gen/implode/<file>`) goes into the shot afterwards. The marker only acts on projectiles made from that
+file (`EntityGetFilename`), so the shot's other spells keep exploding; an identical spell in the same cast implodes
+too. The hooks are taken off while a trigger draws its payload, so the payload is never touched. Random projectile
+runs its pick inside the hooks, so the pick is flipped.
+
+**Implosions** (`files/scripts/implode_lib.lua`). The marker's three LuaComponents: on added it claims the projectile
+(one state per projectile, so duplicate markers act once), stores the explosion's radius R and damage D (also from
+an enabled ExplosionComponent / ExplodeOnDamageComponent, which it switches off) and *neuters* the native explosion
+(radius 0, no damage, no hole, no effects) instead of switching its flags off: Detonator re-arms flagged projectiles,
+and Entangled Worlds forgets a recorded terrain cut only while a flag is on. On the first frame it adds whatever the
+shot added after it. On removal it spawns `files/entities/implosion.xml`, unless the explosion was removed meanwhile
+(Remove explosion, Null shot) or no player is near (streaming out, quitting). The implosion pulls for 15 frames
+(`implosion_pull.lua`: creatures by velocity, projectiles, physics bodies; each Entangled Worlds peer only pulls what
+it owns) and then explodes with 3D in R/3 with the original's terrain power, credited to the caster and sparing them
+when the original would have. A flipped explosion modifier keeps its explosion numbers (so R includes them) and puts
+the unfiltered `files/entities/implode.xml` into the shot.
 
 **Shots and triggers.** `c` is one shot. A trigger's payload is a new shot with its own `c`, so a flip pending in the
 outer shot doesn't enter the payload; it waits for a later modifier of the outer shot. A Sign flip inside the payload
@@ -200,10 +221,13 @@ gap-finders for packaging, docs and tooling.
 
 ## 8. Open
 
-- **Spell flip** (decision 1c): Sign flip right in front of a projectile flips the spell's own damage, and Black hole ↔
-  White hole.
-  - The shot's numbers are shared by the whole cast, so it needs per-spell entity variants generated at init.
-  - EW position-syncs a few projectiles by filename.
+- **Implosions, not covered:** explosions of a LightningComponent (Lightning bolt), bounce/death explosions spawned by
+  other effects, and Clustermod's grenades (its own script still fires them). A projectile that already implodes and
+  then gets more explosion from a Field Imbue circle keeps the implosion's size from before.
+- **Implosions, how it died:** the removal hook can't tell how a projectile died, so one that natively explodes only
+  on a hit (pipe bomb, mine) or only when its time runs out implodes either way.
+- **Implosion balance:** flipped Explosive projectile ×2 reaches the engine's radius-32 explosion damage 13, so the
+  implosion deals 39.
 - Balance: Explosive tiny (§5); "Everything" mode is deliberately strong.
 - Not flipped: `lightning_count` (Electric charge's arcs), Firecrackers' `material`.
 - Not watched in game yet: burning material being put out (the component is vanilla's, and the probe checks it is

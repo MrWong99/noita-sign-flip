@@ -9,14 +9,15 @@
 [*]Sign flip -> Homing: the bolt steers away from enemies
 [*]Sign flip -> Water to poison: turns poison into water. Fire trail: takes fire away and puts out what burns
 [*]Sign flip -> Sign flip -> Damage plus: two flips cancel out
+[*]Sign flip -> Black hole: a White hole. Sign flip -> Bomb, or Sign flip -> Explosive projectile: an implosion - it pulls things in, then explodes with 3x the damage in a third of the radius
 [/list]
-It flips the next modifier in the same cast, also through multicasts, as an always-cast and when Random modifier picks it. A modifier with nothing to flip (curses, orbits, Light, ...) uses the flip up. Works with every vanilla modifier and with other mods' modifiers. Full list: https://github.com/MrWong99/noita-sign-flip/blob/main/docs/modifier-flips.md
+It flips the next modifier in the same cast (or the spell right after it), also through multicasts, as an always-cast and when Random modifier picks it. A modifier with nothing to flip (curses, orbits, Light, ...) uses the flip up. Works with every vanilla modifier and with other mods' modifiers. Full list: https://github.com/MrWong99/noita-sign-flip/blob/main/docs/modifier-flips.md
 
 [b]Setting[/b] (applies from the next new run): Flip cast delay, recharge and mana - Bonuses only (default), Everything, or Never.
 
 [b]Entangled Worlds[/b]: works in multiplayer. Every player needs the same version of the mod and the same setting.
 
-[b]Field Imbue[/b] (0.3.0 or newer): circles cast with Field resonance hand out the flipped modifiers too, and Sign flip can go before or after Field resonance. https://steamcommunity.com/sharedfiles/filedetails/?id=3825663162
+[b]Field Imbue[/b] (0.3.1 or newer): circles cast with Field resonance hand out the flipped modifiers too, and Sign flip can go before or after Field resonance. https://steamcommunity.com/sharedfiles/filedetails/?id=3825663162
 
 Source, notes and issues: https://github.com/MrWong99/noita-sign-flip (MIT)"
 	tags="spells,gameplay"

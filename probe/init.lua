@@ -383,13 +383,17 @@ local function sweep_one(id, base)
 	local heal = 0
 	-- recorded for Field Imbue when a projectile number or part flipped (not for recoil, cast delay, recharge, mana)
 	local recorded = OPPOSITE_IDS[id] or false
+	local dr, dd = p.explosion_radius - b.explosion_radius, p.damage_explosion_add - b.damage_explosion_add
+	local implosion = dr > 0 or (dr == 0 and dd > 0)
 	for _, k in ipairs(SHOT_ADD) do
 		if k ~= "recoil" and not near(p[k], b[k]) then
 			recorded = true
 		end
 		if not near(p[k], b[k]) then
 			local want = 2 * b[k] - p[k]
-			if SHOT_DAMAGE[k] and p[k] > b[k] then
+			if implosion and (k == "explosion_radius" or k == "damage_explosion_add") then
+				want = p[k]
+			elseif SHOT_DAMAGE[k] and p[k] > b[k] then
 				heal, want = heal + (b[k] - p[k]), b[k]
 			end
 			if not near(f[k], want) then
@@ -447,6 +451,9 @@ local function sweep_one(id, base)
 		local stat, field, rule = m[1], m[2], m[3]
 		-- From explosion_radius +30 on, the engine sets the explosion damage itself (13, also for vanilla's two Explosive
 		-- projectiles; behaviour B4/B5)
+		if (stat == "expl_damage" or stat == "expl_radius") and implosion then
+			goto next_stat -- the implode marker neutered the bolt's own explosion (checked by I2)
+		end
 		if stat == "expl_damage" and math.max(p.explosion_radius, f.explosion_radius) >= 30 then
 			notes[#notes + 1] = ("expl_damage %s/%s/%s (engine: radius-based)"):format(fmt(sb[stat]), fmt(sp[stat]), fmt(sf[stat]))
 			goto next_stat
@@ -725,6 +732,98 @@ local function track(e, frames)
 	return alive, last
 end
 
+-- spell flip and implosions (files/scripts/implode_lib.lua) -------------------------------------------------------
+
+local function imp_state(e)
+	local v = e and EntityGetIsAlive(e) and EntityGetFirstComponentIncludingDisabled(e, "VariableStorageComponent", "sf_imp")
+	if not v then
+		return nil, ""
+	end
+	return ComponentGetValue2(v, "value_int"), ComponentGetValue2(v, "value_string")
+end
+
+local function run_implosions()
+	-- I1 Black hole -> White hole
+	equip({ "SIGN_FLIP", "BLACK_HOLE" })
+	local snap = snapshot()
+	fire(1, 0)
+	local hole
+	for _ = 1, 10 do
+		for _, e in ipairs(EntityGetWithTag("projectile") or {}) do
+			if not snap[e] and (EntityGetFilename(e) or ""):find("_hole", 1, true) then
+				hole = e
+			end
+		end
+		if hole then
+			break
+		end
+		wait(1)
+	end
+	result("I1 flipped Black hole is a White hole", hole and (EntityGetFilename(hole) or ""):find("white_hole", 1, true) ~= nil,
+		"spawned=" .. tostring(hole and EntityGetFilename(hole)))
+	quiet_cleanup()
+
+	-- I2 flipped Explosive projectile: the bolt implodes. At the implosion's centre a pinned 40-hp sheep (it must take
+	-- the 3x blast), 22 px to the side a free one (it must be pulled in while the implosion lasts)
+	local sheep = spawn_sheep(PX + 150, PY, 40)
+	wait(3)
+	local r = cast({ "SIGN_FLIP", "EXPLOSIVE_PROJECTILE", "LIGHT_BULLET" }, { dx = 150, dy = 0 })
+	local bolt = r.bolts[1]
+	local st = imp_state(bolt)
+	wait(2)
+	local st2, stash2 = imp_state(bolt)
+	local pc = bolt and EntityGetIsAlive(bolt) and EntityGetFirstComponentIncludingDisabled(bolt, "ProjectileComponent")
+	local rad = pc and ComponentObjectGetValue2(pc, "config_explosion", "explosion_radius")
+	local imp, centre, victim, x0, xmin, blast_r, blast_d
+	for _ = 1, 40 do
+		if not imp then
+			imp = EntityGetWithTag("sf_implosion")[1]
+			if imp then
+				local ix, iy = EntityGetTransform(imp)
+				local ic = EntityGetFirstComponentIncludingDisabled(imp, "ProjectileComponent")
+				blast_r = ic and ComponentObjectGetValue2(ic, "config_explosion", "explosion_radius")
+				blast_d = ic and ComponentObjectGetValue2(ic, "config_explosion", "damage")
+				centre = spawn_sheep(ix, iy, 40)
+				victim = EntityLoad("data/entities/animals/sheep.xml", ix + 22, iy)
+				local dm = EntityGetFirstComponentIncludingDisabled(victim, "DamageModelComponent")
+				ComponentSetValue2(dm, "max_hp", 40)
+				ComponentSetValue2(dm, "hp", 40)
+				x0 = ix + 22
+			end
+		elseif victim and EntityGetIsAlive(victim) then
+			local vx = EntityGetTransform(victim)
+			xmin = math.min(xmin or vx, vx)
+		end
+		wait(1)
+	end
+	local R, D = stash2:match("^([^,]*),([^,]*),")
+	local centre_hp = hp(centre)
+	log("I2 marker state", tostring(st), "->", tostring(st2), "stash=" .. stash2, "neutered radius=" .. fmt(rad),
+		"blast radius=" .. fmt(blast_r), "damage=" .. fmt(blast_d), "centre sheep hp=" .. fmt(centre_hp),
+		"free sheep nearest x offset=" .. fmt(xmin and x0 and (xmin - x0)))
+	result("I2 flipped Explosive projectile implodes", st2 == 2 and near(tonumber(R), 17, 0.01) and near(tonumber(D), 0.2, 0.01)
+		and near(rad, 0) and near(blast_r, 17 / 3, 0.01) and near(blast_d, 0.6, 0.01) and centre_hp < 39.5,
+		"stash R,D=" .. tostring(R) .. "," .. tostring(D), "blast " .. fmt(blast_r) .. "/" .. fmt(blast_d), "centre hp=" .. fmt(centre_hp))
+	result("I2b the implosion pulls", xmin ~= nil and xmin < x0 - 3, "free sheep came " .. fmt(xmin and x0 and (x0 - xmin)) .. " px closer")
+	kill(sheep, centre, victim)
+	quiet_cleanup()
+
+	-- I3 the spell's marker only acts on its own file: a double cast with a flipped Spark bolt and a Bubble spark
+	local r = cast({ "BURST_2", "SIGN_FLIP", "LIGHT_BULLET", "BUBBLESHOT" })
+	local spark = r.bolts[1]
+	local bubble
+	for _, p in ipairs(EntityGetWithTag("projectile") or {}) do
+		if (EntityGetFilename(p) or ""):find("bubbleshot", 1, true) then
+			bubble = p
+		end
+	end
+	wait(2)
+	local s1, s2 = imp_state(spark), imp_state(bubble)
+	result("I3 spell marker acts on its own spell only", s1 == 2 and s2 == -1, "spark state=" .. tostring(s1),
+		"bubble state=" .. tostring(s2), "(want 2 and -1)")
+	quiet_cleanup()
+end
+
 local function run_behaviour()
 	-- negative damage on a hurt sheep: a flipped Damage plus / Heavy shot heals it (net of the bolt's own 0.12)
 	for _, test in ipairs({ { 0.48, "DAMAGE", "LIGHT_BULLET" }, { 1.28, "SIGN_FLIP", "DAMAGE", "LIGHT_BULLET" },
@@ -949,6 +1048,18 @@ local function run_fi()
 	result("F11 Random modifier's Field resonance passes the flip on", near(damage_of(r), -0.4), "damage=" .. fmt(damage_of(r)),
 		"sf_negated=" .. tostring(r.root.sf_negated))
 	quiet_cleanup()
+	-- a flipped Explosive projectile circle makes the bolts crossing it implode
+	field, payload = cast_field({ "FIELD_IMBUE", "SIGN_FLIP", "EXPLOSIVE_PROJECTILE", "BERSERK_FIELD" })
+	local _, after12, bolt12 = bolt_through()
+	wait(2)
+	local st12 = bolt12 and EntityGetIsAlive(bolt12) and EntityGetFirstComponentIncludingDisabled(bolt12, "VariableStorageComponent", "sf_imp")
+	local fst = field and EntityGetFirstComponentIncludingDisabled(field, "VariableStorageComponent", "sf_imp")
+	result("F12 flipped Explosive projectile circle: bolts implode", payload == "-EXPLOSIVE_PROJECTILE"
+		and st12 and ComponentGetValue2(st12, "value_int") == 2, "payload=" .. tostring(payload),
+		"bolt state=" .. tostring(st12 and ComponentGetValue2(st12, "value_int")), "circle marker=" .. tostring(fst ~= nil),
+		"fi_mods=" .. tostring(after12 and after12.fi_mods))
+	kill(field)
+	quiet_cleanup()
 	-- a bolt in the same multicast as the imbuing field gets the shot's (flipped) gravity back on its first frame
 	equip({ "BURST_2", "FIELD_IMBUE", "SIGN_FLIP", "GRAVITY", "LIGHT_BULLET", "BERSERK_FIELD" })
 	local snap = snapshot()
@@ -996,6 +1107,7 @@ local function run_all()
 			run_random()
 			run_economy()
 			run_behaviour()
+			run_implosions()
 		end
 	elseif SUITE == "fi" or SUITE == "fi-first" then
 		run_fi()

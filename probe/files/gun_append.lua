@@ -1,7 +1,8 @@
 -- sign_flip probe: makes Random modifier pick the action named in the global "sfprobe_pick" (probe/init.lua's S8)
 local sfprobe_random = Random
 function Random(a, b)
-	local want = GlobalsGetValue("sfprobe_pick", "")
+	-- the mods' builders run this while reflecting, before a world exists (GlobalsGetValue would log an error)
+	local want = not reflecting and GlobalsGetValue("sfprobe_pick", "") or ""
 	if want ~= "" and a == 1 and b == #actions then
 		for i, act in ipairs(actions) do
 			if act.id == want then
