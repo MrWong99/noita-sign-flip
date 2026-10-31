@@ -1,0 +1,8 @@
+<!-- A flipped Electricity curse (data/entities/misc/hitfx_curse_wither_electricity.xml): the hit target resists electricity damage
+     instead of taking more (files/entities/hitfx_ward_electricity_effect.xml). -->
+<Entity>
+	<HitEffectComponent
+		effect_hit="LOAD_UNIQUE_CHILD_ENTITY"
+		value_string="mods/sign_flip/files/entities/hitfx_ward_electricity_effect.xml" >
+	</HitEffectComponent>
+</Entity>

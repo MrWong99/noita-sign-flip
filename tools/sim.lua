@@ -454,9 +454,61 @@ r = cast({ "SIGN_FLIP", "ORBIT_SHOT", "LIGHT_BULLET" })
 check("S9 change after drawing (Orbit shot)", "lifetime", r.c.lifetime_add, 2 * base.c.lifetime_add - orbit.c.lifetime_add)
 check("S9", "damage", net(r.c), 2 * dmg - net(orbit.c))
 
-r = cast({ "SIGN_FLIP", "LIGHT", "DAMAGE", "LIGHT_BULLET" })
+r = cast({ "SIGN_FLIP", "HOMING_ROTATE", "DAMAGE", "LIGHT_BULLET" })
 check("S10 nothing to flip: wasted", "damage", net(r.c), dmg + plus)
 check("S10", "sf_negated", r.c.sf_negated, nil)
+
+r = cast({ "SIGN_FLIP", "LIGHT", "DAMAGE", "LIGHT_BULLET" })
+check("S10b Light carries darkness", "extra_entities", r.c.extra_entities,
+	"mods/sign_flip/files/entities/darkness.xml,data/entities/particles/tinyspark_yellow.xml,")
+check("S10b", "damage", net(r.c), dmg + plus)
+r = cast({ "SIGN_FLIP", "HOMING_SHOOTER", "LIGHT_BULLET" })
+check("S10c Boomerang veers away from players", "extra_entities", r.c.extra_entities,
+	"mods/sign_flip/files/entities/repel_players.xml,data/entities/particles/tinyspark_white.xml,")
+-- colours turn complementary; the tinyspark_red trail stays (colour_spell recolours it), cast delay -8 flips to +8
+for _, t in ipairs({ { "RED", "green", true }, { "GREEN", "red", true }, { "ORANGE", "blue", true }, { "BLUE", "orange", true },
+		{ "YELLOW", "purple", true }, { "PURPLE", "yellow", true }, { "RAINBOW", "invis", true }, { "INVIS", "rainbow", false } }) do
+	r = cast({ "SIGN_FLIP", "COLOUR_" .. t[1], "LIGHT_BULLET" })
+	check("S10d Colour " .. t[1] .. " turns " .. t[2], "extra_entities", r.c.extra_entities,
+		(t[3] and "data/entities/particles/tinyspark_red.xml," or "") .. "data/entities/misc/colour_" .. t[2] .. ".xml,")
+	local plain = cast({ "COLOUR_" .. t[1], "LIGHT_BULLET" })
+	check("S10d", "fire_rate_wait", r.c.fire_rate_wait, base.c.fire_rate_wait - (plain.c.fire_rate_wait - base.c.fire_rate_wait))
+end
+-- this mod's own opposites, swapped by file (the vanilla modifiers append nothing else, except the giga hitfx sparks)
+for _, t in ipairs({
+	{ "ROCKET_DOWNWARDS", "rocket_upwards.xml," },
+	{ "LASER_EMITTER_WIDER", "laser_emitter_narrower.xml," },
+	{ "HITFX_CRITICAL_WATER", "hitfx_critical_not_water.xml," },
+	{ "HITFX_CRITICAL_OIL", "hitfx_critical_not_oil.xml," },
+	{ "HITFX_CRITICAL_BLOOD", "hitfx_critical_not_blood.xml," },
+	{ "HITFX_BURNING_CRITICAL_HIT", "hitfx_critical_not_burning.xml," },
+	{ "HITFX_EXPLOSION_SLIME", "hitfx_implode_slime.xml," },
+	{ "HITFX_EXPLOSION_SLIME_GIGA", "hitfx_implode_slime_giga.xml,data/entities/particles/tinyspark_purple.xml," },
+	{ "HITFX_EXPLOSION_ALCOHOL", "hitfx_implode_alcohol.xml," },
+	{ "HITFX_EXPLOSION_ALCOHOL_GIGA", "hitfx_implode_alcohol_giga.xml,data/entities/particles/tinyspark_orange.xml," },
+	{ "HITFX_TOXIC_CHARM", "hitfx_toxic_berserk.xml," },
+	{ "MATTER_EATER", "matter_maker.xml," },
+	{ "CRUMBLING_EARTH_PROJECTILE", "solidify_earth.xml," },
+	{ "AREA_DAMAGE", "area_heal.xml," },
+	{ "CURSE", "hitfx_bless.xml," },
+	{ "CURSE_WITHER_PROJECTILE", "hitfx_ward_projectile.xml," },
+	{ "CURSE_WITHER_EXPLOSION", "hitfx_ward_explosion.xml," },
+	{ "CURSE_WITHER_MELEE", "hitfx_ward_melee.xml," },
+	{ "CURSE_WITHER_ELECTRICITY", "hitfx_ward_electricity.xml," },
+	{ "REMOVE_BOUNCE", "double_bounce.xml," },
+}) do
+	r = cast({ "SIGN_FLIP", t[1], "LIGHT_BULLET" })
+	check("S10e " .. t[1] .. " flipped", "extra_entities", r.c.extra_entities, "mods/sign_flip/files/entities/" .. t[2])
+	-- the hitfx explosions change no explosion number: no shot-wide implode marker
+	check("S10e", "implode", entry(r.c.extra_entities, IMPLODE), false)
+end
+-- Remove bounce: the shot's bounces double through the number flip, and twice for two flips
+r = cast({ "BOUNCE", "SIGN_FLIP", "REMOVE_BOUNCE", "LIGHT_BULLET" })
+check("S10f Remove bounce doubles the shot's bounces", "bounces", r.c.bounces, 20)
+r = cast({ "BOUNCE", "SIGN_FLIP", "REMOVE_BOUNCE", "SIGN_FLIP", "REMOVE_BOUNCE", "LIGHT_BULLET" })
+check("S10f twice", "bounces", r.c.bounces, 40)
+check("S10f twice", "extra_entities", r.c.extra_entities,
+	"mods/sign_flip/files/entities/double_bounce.xml,mods/sign_flip/files/entities/double_bounce.xml,")
 
 r = cast({ "SIGN_FLIP", "LIGHT_BULLET" })
 check("S11 a spell after it: its numbers stay", "damage", net(r.c), dmg)

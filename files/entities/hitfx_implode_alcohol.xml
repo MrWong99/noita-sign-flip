@@ -1,0 +1,9 @@
+<!-- A flipped HITFX_EXPLOSION_ALCOHOL (data/entities/misc/hitfx_explode_alcohol.xml): hitting a drunk target makes
+     it implode instead of explode (files/entities/hitfx_implode_explosion.xml). -->
+<Entity>
+	<HitEffectComponent
+		condition_status="ALCOHOLIC"
+		effect_hit="LOAD_UNIQUE_CHILD_ENTITY"
+		value_string="mods/sign_flip/files/entities/hitfx_implode_explosion.xml" >
+	</HitEffectComponent>
+</Entity>

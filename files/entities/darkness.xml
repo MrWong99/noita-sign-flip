@@ -1,0 +1,15 @@
+<!-- A flipped Light (data/entities/misc/light.xml): instead of a hole in the fog of war, the projectile carries a cloud
+     of darkness the size of Light's glow, like an unlit cave. A soft black circle drawn over the world, terrain
+     included; cosmetic only, like Light. -->
+<Entity>
+	<_Transform
+		scale.x="4" scale.y="4" >
+	</_Transform>
+
+	<SpriteComponent
+		alpha="0.92"
+		image_file="mods/sign_flip/files/particles/darkness.xml"
+		smooth_filtering="1"
+		z_index="-50" >
+	</SpriteComponent>
+</Entity>

@@ -542,8 +542,34 @@ local function run_semantics()
 	want("S7b always-cast + deck Sign flip cancel", damage_of(r), 0.4)
 	quiet_cleanup()
 	r = cast({ "SIGN_FLIP", "LIGHT", "DAMAGE", "LIGHT_BULLET" })
-	want("S10 nothing to flip (Light): wasted", damage_of(r), 0.4)
+	want("S10 the flip goes to Light (darkness), not Damage plus", damage_of(r), 0.4)
 	quiet_cleanup()
+end
+
+local function vsc_str(e, name)
+	for _, v in ipairs(EntityGetComponentIncludingDisabled(e, "VariableStorageComponent") or {}) do
+		if ComponentGetValue2(v, "name") == name then
+			return ComponentGetValue2(v, "value_string")
+		end
+	end
+	return nil -- explicit: tostring() with zero arguments throws
+end
+
+local function wait_new(snap, pattern, max_frames)
+	for _ = 1, max_frames do
+		for _, tag in ipairs(PROJ_TAGS) do
+			for _, e in ipairs(EntityGetWithTag(tag)) do
+				if not snap[e] then
+					snap[e] = true
+					if (EntityGetFilename(e) or ""):find(pattern, 1, true) then
+						return e
+					end
+				end
+			end
+		end
+		wait(1)
+	end
+	return nil
 end
 
 -- opposites: what flipped modifiers add (files/scripts/opposites_build.lua) -----------------------------------------
@@ -642,6 +668,381 @@ local function run_opposites()
 	-- the scripts set the vertical speed to twice the bolt's speed: far beyond what gravity adds in 24 frames (~80)
 	result("O6 flipped Fly upwards flies down", vys[1] and vys[2] and vys[1] < -300 and vys[2] > 300,
 		"vertical speed after 24 frames: plain " .. fmt(vys[1]), "flipped " .. fmt(vys[2]), "(< 0 is up)")
+end
+
+-- this mod's own opposites (PAIRS in files/scripts/opposites_build.lua): each replacement file is on the bolt, and what it
+-- does where that can be checked without luck
+
+local SF = "mods/sign_flip/files/"
+
+local function has_script(e, file)
+	for _, lc in ipairs(e and EntityGetIsAlive(e) and EntityGetComponentIncludingDisabled(e, "LuaComponent") or {}) do
+		if ComponentGetValue2(lc, "script_source_file") == SF .. "scripts/" .. file then
+			return true
+		end
+	end
+	return false
+end
+
+-- the value_string of every HitEffectComponent on the bolt, comma-separated
+local function hit_effects(e)
+	local out = {}
+	for _, h in ipairs(e and EntityGetIsAlive(e) and EntityGetComponentIncludingDisabled(e, "HitEffectComponent") or {}) do
+		out[#out + 1] = ComponentGetValue2(h, "value_string")
+	end
+	return table.concat(out, ",")
+end
+
+-- a pinned sheep in the bolt path (PX + 150) and a bolt shot at it; returns the sheep, the bolt and the frame it was shot
+local function shoot_sheep(cards, hp_now, prepare)
+	local sheep = spawn_sheep(PX + 150, PY, hp_now)
+	if prepare then
+		prepare(sheep)
+	end
+	wait(3)
+	local r = cast(cards, { dx = 150, dy = 0 })
+	return sheep, r.bolts[1]
+end
+
+local function run_parts()
+	-- O7 Light -> darkness
+	local r = cast({ "SIGN_FLIP", "LIGHT", "LIGHT_BULLET" })
+	local dark = false
+	for _, sc in ipairs(r.bolts[1] and EntityGetComponentIncludingDisabled(r.bolts[1], "SpriteComponent") or {}) do
+		dark = dark or ComponentGetValue2(sc, "image_file") == SF .. "particles/darkness.xml"
+	end
+	local lights = r.bolts[1] and #(EntityGetComponentIncludingDisabled(r.bolts[1], "LightComponent") or {}) or -1
+	result("O7 flipped Light carries darkness", dark, "darkness sprite=" .. tostring(dark), "LightComponents=" .. lights)
+	quiet_cleanup()
+
+	-- O8 Boomerang -> veers away from players: the script instead of a homing on the shooter
+	r = cast({ "SIGN_FLIP", "HOMING_SHOOTER", "LIGHT_BULLET" })
+	local b = r.bolts[1]
+	local h = b and homing_coeffs(b) or {}
+	result("O8 flipped Boomerang repels players", has_script(b, "repel_players.lua") and #h == 0,
+		"repel script=" .. tostring(has_script(b, "repel_players.lua")), "HomingComponents=" .. #h)
+	quiet_cleanup()
+
+	-- O9 colours: complementary colour_name, cosmetic sparks recoloured, cast delay -8 -> +8
+	for _, t in ipairs({ { "RED", "green", "spark_green" }, { "PURPLE", "yellow", "spark_yellow" }, { "RAINBOW", "invis" },
+		{ "INVIS", "rainbow" } }) do
+		local plain = cast({ "COLOUR_" .. t[1], "LIGHT_BULLET" })
+		quiet_cleanup()
+		r = cast({ "SIGN_FLIP", "COLOUR_" .. t[1], "LIGHT_BULLET" })
+		b = r.bolts[1]
+		local name = b and vsc_str(b, "colour_name")
+		wait(2)
+		local mats, emitting = {}, 0
+		for _, pe in ipairs(b and EntityGetIsAlive(b) and EntityGetComponentIncludingDisabled(b, "ParticleEmitterComponent") or {}) do
+			if ComponentGetValue2(pe, "emit_cosmetic_particles") then
+				mats[#mats + 1] = ComponentGetValue2(pe, "emitted_material_name")
+				emitting = emitting + (ComponentGetValue2(pe, "is_emitting") and 1 or 0)
+			end
+		end
+		local mat_list = "," .. table.concat(mats, ",") .. ","
+		local looks = (t[3] and mat_list:find("," .. t[3] .. ",", 1, true) ~= nil) or (t[2] == "invis" and emitting == 0)
+			or t[2] == "rainbow"
+		result("O9 flipped Colour " .. t[1] .. " is " .. t[2], name == t[2] and looks
+			and near(r.root.fire_rate_wait, plain.root.fire_rate_wait + 16), "colour_name=" .. tostring(name),
+			"cosmetic emitters=" .. table.concat(mats, ","), "emitting=" .. emitting,
+			"cast delay " .. fmt(plain.root.fire_rate_wait) .. " -> " .. fmt(r.root.fire_rate_wait))
+		quiet_cleanup()
+	end
+
+	-- O10 Rocket downwards -> rockets up: shot straight up, the bolt bursts into five rockets that rise
+	r = cast({ "SIGN_FLIP", "ROCKET_DOWNWARDS", "LIGHT_BULLET" }, { dx = 0, dy = -1 })
+	b = r.bolts[1]
+	local script = has_script(b, "rocket_upwards.lua")
+	local rockets = {}
+	for _ = 1, 12 do
+		wait(1)
+		for _, tag in ipairs(PROJ_TAGS) do
+			for _, p in ipairs(EntityGetWithTag(tag) or {}) do
+				if (EntityGetFilename(p) or ""):find("rocket_upwards_shot", 1, true) then
+					rockets[p] = true
+				end
+			end
+		end
+		if next(rockets) then
+			wait(2)
+			break
+		end
+	end
+	local n, up, sum_vx = 0, 0, 0
+	for p in pairs(rockets) do
+		local vc = EntityGetIsAlive(p) and EntityGetFirstComponentIncludingDisabled(p, "VelocityComponent")
+		if vc then
+			n = n + 1
+			local vx, vy = ComponentGetValue2(vc, "mVelocity")
+			sum_vx = sum_vx + vx
+			up = up + (vy < 0 and ComponentGetValue2(vc, "gravity_y") < 0 and 1 or 0)
+		end
+	end
+	result("O10 flipped Rocket downwards fires rockets up", script and n == 5 and up == 5,
+		"script=" .. tostring(script), "rockets=" .. n, "rising with gravity up=" .. up, "sum vx=" .. fmt(sum_vx),
+		"bolt alive=" .. tostring(b and EntityGetIsAlive(b)))
+	quiet_cleanup()
+
+	-- O11 Laser emitter wider -> narrower: Plasma beam cross 3.5/0.08/112 per beam, wider adds 2/0.025/36
+	local function lasers(cards)
+		equip(cards)
+		local snap = snapshot()
+		fire(1, 0)
+		local orb = wait_new(snap, "orb_laseremitter_four", 10)
+		wait(3)
+		local out = {}
+		for _, lc in ipairs(orb and EntityGetIsAlive(orb) and EntityGetComponentIncludingDisabled(orb, "LaserEmitterComponent") or {}) do
+			out[#out + 1] = { ComponentObjectGetValue2(lc, "laser", "beam_radius"), ComponentObjectGetValue2(lc, "laser", "damage_to_entities"),
+				ComponentObjectGetValue2(lc, "laser", "max_length") }
+		end
+		local left = orb and has_script(orb, "laser_emitter_narrower.lua")
+		quiet_cleanup()
+		return out, left
+	end
+	local function beams_are(list, rad, dmg, len)
+		if #list ~= 4 then
+			return false
+		end
+		for _, l in ipairs(list) do
+			if not (near(l[1], rad, 1e-3) and near(l[2], dmg, 1e-3) and near(l[3], len, 1e-3)) then
+				return false
+			end
+		end
+		return true
+	end
+	local function show(list)
+		local l = list[1]
+		return l and (fmt(l[1]) .. "/" .. fmt(l[2]) .. "/" .. fmt(l[3])) or "none"
+	end
+	local wide = lasers({ "LASER_EMITTER_WIDER", "LASER_EMITTER_FOUR" })
+	local narrow, left = lasers({ "SIGN_FLIP", "LASER_EMITTER_WIDER", "LASER_EMITTER_FOUR" })
+	result("O11 flipped Laser emitter wider narrows", beams_are(wide, 5.5, 0.105, 148) and beams_are(narrow, 1.5, 0.055, 76)
+		and not left, "plain " .. show(wide), "flipped " .. show(narrow), "(want 5.5/0.105/148 and 1.5/0.055/76)",
+		"script left=" .. tostring(left))
+
+	-- O12 critical on wet -> on not wet: the boost is disarmed just before hitting a wet sheep, armed before a dry one
+	for _, t in ipairs({ { "HITFX_CRITICAL_OIL", "oil" }, { "HITFX_CRITICAL_BLOOD", "blood" },
+		{ "HITFX_BURNING_CRITICAL_HIT", "burning" } }) do
+		local id = t[1]
+		r = cast({ "SIGN_FLIP", id, "LIGHT_BULLET" })
+		local boosts = r.bolts[1] and EntityGetComponentIncludingDisabled(r.bolts[1], "HitEffectComponent") or {}
+		local eff = boosts[1] and ComponentGetValue2(boosts[1], "effect_hit")
+		result("O12 flipped " .. id .. " carries a disarmable crit boost", #boosts == 1 and eff == "CRITICAL_HIT_BOOST"
+			and has_script(r.bolts[1], "hitfx_critical_not_" .. t[2] .. ".lua"),
+			"HitEffectComponents=" .. #boosts, "effect_hit=" .. tostring(eff))
+		quiet_cleanup()
+	end
+	local seen = {}
+	for _, wet in ipairs({ true, false }) do
+		local sheep, bolt = shoot_sheep({ "SIGN_FLIP", "HITFX_CRITICAL_WATER", "LIGHT_BULLET" }, 40, wet and function(s)
+			LoadGameEffectEntityTo(s, "data/entities/misc/effect_wet.xml")
+		end)
+		local boost = bolt and EntityGetFirstComponentIncludingDisabled(bolt, "HitEffectComponent", "hitfx_critical_not_WET")
+		local lowest
+		for _ = 1, 40 do
+			if not bolt or not EntityGetIsAlive(bolt) then
+				break
+			end
+			lowest = math.min(lowest or 1000, ComponentGetValue2(boost, "value"))
+			wait(1)
+		end
+		wait(10)
+		seen[wet] = { lowest = lowest, lost = 40 - hp(sheep), wet = GameGetGameEffectCount(sheep, "WET") }
+		kill(sheep)
+		quiet_cleanup()
+	end
+	-- the hp lost is only logged: the Spark bolt's own 5 % crit chance can crit the wet sheep too
+	result("O12 flipped Critical on wet: crit on dry targets only", seen[true].lowest == 0 and seen[false].lowest == 100,
+		"boost value near wet sheep=" .. fmt(seen[true].lowest), "near dry=" .. fmt(seen[false].lowest), "(want 0 and 100)",
+		"hp lost wet/dry=" .. fmt(seen[true].lost) .. "/" .. fmt(seen[false].lost), "WET effects=" .. tostring(seen[true].wet))
+
+	-- O13 explosive slime / alcohol on hit -> the target implodes: each carries the implode blast, which implodes
+	for _, t in ipairs({ { "HITFX_EXPLOSION_SLIME", "" }, { "HITFX_EXPLOSION_SLIME_GIGA", "_giga" },
+		{ "HITFX_EXPLOSION_ALCOHOL", "" }, { "HITFX_EXPLOSION_ALCOHOL_GIGA", "_giga" } }) do
+		r = cast({ "SIGN_FLIP", t[1], "LIGHT_BULLET" })
+		local fx = hit_effects(r.bolts[1])
+		result("O13 flipped " .. t[1] .. " loads the implosion", fx == SF .. "entities/hitfx_implode_explosion" .. t[2] .. ".xml",
+			"hit effects=" .. fx)
+		quiet_cleanup()
+	end
+	local blast = EntityLoad(SF .. "entities/hitfx_implode_explosion.xml", PX + 150, PY)
+	local imp, pull, br, bd
+	for _ = 1, 10 do
+		wait(1)
+		imp = (EntityGetInRadiusWithTag(PX + 150, PY, 8, "sf_implosion") or {})[1]
+		if imp then
+			local ic = EntityGetFirstComponentIncludingDisabled(imp, "ProjectileComponent")
+			br = ic and ComponentObjectGetValue2(ic, "config_explosion", "explosion_radius")
+			bd = ic and ComponentObjectGetValue2(ic, "config_explosion", "damage")
+			local pv = EntityGetFirstComponentIncludingDisabled(imp, "VariableStorageComponent", "imp_pull_r")
+			pull = pv and ComponentGetValue2(pv, "value_float")
+			break
+		end
+	end
+	result("O13 the slime / alcohol blast implodes", imp ~= nil and near(br, 5, 0.01) and near(bd, 8.25, 0.01) and near(pull, 22.5, 0.01),
+		"implosion=" .. tostring(imp), "radius=" .. fmt(br), "damage=" .. fmt(bd), "pull=" .. fmt(pull), "(want 5 / 8.25 / 22.5)")
+	kill(blast)
+	quiet_cleanup()
+
+	-- O14 Toxic charm -> a toxic target goes berserk; vanilla's charm on the same target as the control
+	local fx14 = {}
+	for i, cards in ipairs({ { "HITFX_TOXIC_CHARM", "LIGHT_BULLET" }, { "SIGN_FLIP", "HITFX_TOXIC_CHARM", "LIGHT_BULLET" } }) do
+		local sheep = shoot_sheep(cards, 40, function(s)
+			LoadGameEffectEntityTo(s, "data/entities/misc/effect_radioactive.xml")
+			EntityAddRandomStains(s, CellFactory_GetType("radioactive_liquid"), 300)
+		end)
+		wait(30)
+		fx14[i] = { charm = GameGetGameEffectCount(sheep, "CHARM"), berserk = GameGetGameEffectCount(sheep, "BERSERK") }
+		kill(sheep)
+		quiet_cleanup()
+	end
+	result("O14 flipped Toxic charm drives a toxic target berserk", fx14[2].berserk > 0 and fx14[2].charm == 0,
+		"flipped: berserk=" .. fx14[2].berserk, "charm=" .. fx14[2].charm,
+		"| vanilla control: charm=" .. fx14[1].charm, "berserk=" .. fx14[1].berserk)
+
+	-- O15 Area damage -> heals: a bolt held still 10 px from a sheep at 39/40 heals it to 40, never past
+	r = cast({ "SIGN_FLIP", "AREA_DAMAGE", "LIGHT_BULLET" })
+	b = r.bolts[1]
+	local sheep = spawn_sheep(PX + 100, PY - 60, 39)
+	local hp_max = 0
+	if b and EntityGetIsAlive(b) then
+		local pc = EntityGetFirstComponentIncludingDisabled(b, "ProjectileComponent")
+		ComponentSetValue2(pc, "collide_with_entities", false)
+		ComponentSetValue2(pc, "lifetime", 300)
+		ComponentSetValue2(EntityGetFirstComponentIncludingDisabled(b, "VelocityComponent"), "mVelocity", 0, 0)
+		pin(b, PX + 100, PY - 50)
+		for _ = 1, 20 do
+			wait(1)
+			hp_max = math.max(hp_max, hp(sheep))
+		end
+	end
+	local damagers = b and EntityGetIsAlive(b) and #(EntityGetComponentIncludingDisabled(b, "AreaDamageComponent") or {}) or -1
+	result("O15 flipped Area damage heals", has_script(b, "area_heal.lua") and near(hp(sheep), 40) and hp_max <= 40 and damagers == 0,
+		"sheep hp 39 -> " .. fmt(hp(sheep)), "highest=" .. fmt(hp_max), "AreaDamageComponents=" .. damagers)
+	kill(sheep, b)
+	quiet_cleanup()
+
+	-- O16 Curse -> blessing: the init on a hurt sheep blesses it, and it heals 0.08 every 30 frames
+	r = cast({ "SIGN_FLIP", "CURSE", "LIGHT_BULLET" })
+	local fx = hit_effects(r.bolts[1])
+	quiet_cleanup()
+	sheep = spawn_sheep(PX + 100, PY - 60, 20)
+	local init = EntityLoad(SF .. "entities/hitfx_bless_init.xml", PX + 100, PY - 60)
+	EntityAddChild(sheep, init)
+	wait(75)
+	local blessed = #(EntityGetAllChildren(sheep, "sf_blessing") or {})
+	result("O16 flipped Curse blesses", fx == SF .. "entities/hitfx_bless_init.xml" and blessed == 1 and hp(sheep) > 20.1,
+		"hit effects=" .. fx, "blessings=" .. blessed, "hp 20 -> " .. fmt(hp(sheep)) .. " after 75 frames (want about 20.16-20.24)")
+	kill(sheep)
+
+	-- O17 wither curses -> wards: the multiplier drops by 0.25 and comes back exactly when the ward ends
+	for _, ty in ipairs({ "projectile", "explosion", "melee", "electricity" }) do
+		r = cast({ "SIGN_FLIP", "CURSE_WITHER_" .. ty:upper(), "LIGHT_BULLET" })
+		fx = hit_effects(r.bolts[1])
+		quiet_cleanup()
+		sheep = spawn_sheep(PX + 100, PY - 60, 40)
+		local dm = EntityGetFirstComponentIncludingDisabled(sheep, "DamageModelComponent")
+		local before = ComponentObjectGetValue2(dm, "damage_multipliers", ty)
+		local ward = EntityLoad(SF .. "entities/hitfx_ward_" .. ty .. "_effect.xml", PX + 100, PY - 60)
+		EntityAddChild(sheep, ward)
+		wait(3)
+		local during = ComponentObjectGetValue2(dm, "damage_multipliers", ty)
+		EntityKill(ward)
+		wait(3)
+		local after = ComponentObjectGetValue2(dm, "damage_multipliers", ty)
+		result("O17 flipped " .. ty .. " curse wards", fx == SF .. "entities/hitfx_ward_" .. ty .. "_effect.xml"
+			and near(during, before - math.min(0.25, math.max(0, before))) and near(after, before),
+			"hit effects=" .. fx, ty .. " multiplier " .. fmt(before) .. " -> " .. fmt(during) .. " -> " .. fmt(after))
+		kill(sheep)
+	end
+
+	-- O18 Remove bounce -> doubles: the bolt's own bounces (B) double, at least 1, on top of the shot's flipped ones
+	local function bounces(cards)
+		local res = cast(cards)
+		wait(2)
+		local st = bolt_stats(res.bolts[1])
+		local pc = res.bolts[1] and EntityGetIsAlive(res.bolts[1]) and EntityGetFirstComponentIncludingDisabled(res.bolts[1], "ProjectileComponent")
+		local cfg = pc and ComponentObjectGetValue2(pc, "config", "bounces")
+		local left = has_script(res.bolts[1], "double_bounce.lua")
+		quiet_cleanup()
+		return st and st.bounces, cfg, left
+	end
+	local own = bounces({ "LIGHT_BULLET" })
+	local with_bounce, cfg_bounce = bounces({ "BOUNCE", "LIGHT_BULLET" })
+	local one, _, left1 = bounces({ "SIGN_FLIP", "REMOVE_BOUNCE", "LIGHT_BULLET" })
+	local more, cfg_more = bounces({ "BOUNCE", "SIGN_FLIP", "REMOVE_BOUNCE", "LIGHT_BULLET" })
+	local want1 = own and math.max(2 * own, 1)
+	result("O18 flipped Remove bounce doubles bounces", want1 and one == want1 and more == want1 + 20 and not left1,
+		"own=" .. fmt(own), "flipped=" .. fmt(one) .. " (want " .. fmt(want1) .. ")", "with Bounce first=" .. fmt(more)
+		.. " (want " .. fmt(want1 and want1 + 20) .. ")", "config.bounces=" .. fmt(cfg_more),
+		"| plain Bounce: bounces_left=" .. fmt(with_bounce) .. " config.bounces=" .. fmt(cfg_bounce))
+
+	-- O19 Crumbling earth -> solidify: when the bolt is removed it leaves the hardening burst behind
+	r = cast({ "SIGN_FLIP", "CRUMBLING_EARTH_PROJECTILE", "LIGHT_BULLET" })
+	b = r.bolts[1]
+	local script19 = has_script(b, "solidify_earth.lua")
+	local bx, by = PX, PY
+	if b and EntityGetIsAlive(b) then
+		bx, by = EntityGetTransform(b)
+		EntityKill(b)
+	end
+	local burst, from
+	for _ = 1, 5 do
+		wait(1)
+		for _, e in ipairs(EntityGetInRadius(bx, by, 40) or {}) do
+			if (EntityGetFilename(e) or ""):find("solidify_earth_burst", 1, true) then
+				burst = e
+				local mc = EntityGetFirstComponentIncludingDisabled(e, "MagicConvertMaterialComponent")
+				from = mc and ComponentGetValue2(mc, "from_material_array")
+			end
+		end
+		if burst then
+			break
+		end
+	end
+	local loose = 0
+	for _, e in ipairs(EntityGetInRadius(bx, by, 40) or {}) do
+		loose = loose + #(EntityGetComponentIncludingDisabled(e, "LooseGroundComponent") or {})
+	end
+	result("O19 flipped Crumbling earth solidifies", script19 and burst ~= nil and loose == 0, "script=" .. tostring(script19),
+		"burst=" .. tostring(burst), "from=" .. tostring(from), "LooseGroundComponents=" .. loose)
+	quiet_cleanup()
+
+	-- O20 Matter eater -> matter maker, last: it leaves rock in the air. Shot down-left, away from where later tests fire.
+	r = cast({ "SIGN_FLIP", "MATTER_EATER", "LIGHT_BULLET" }, { dx = -1, dy = 1 })
+	b = r.bolts[1]
+	local script20 = has_script(b, "matter_maker.lua")
+	local eaters = b and #(EntityGetComponentIncludingDisabled(b, "CellEaterComponent") or {}) or -1
+	local path, emitters = {}, 0
+	for _ = 1, 30 do
+		if not b or not EntityGetIsAlive(b) then
+			break
+		end
+		local x, y = EntityGetTransform(b)
+		local d = math.sqrt((x - PX) ^ 2 + (y - PY) ^ 2)
+		emitters = math.max(emitters, #(EntityGetComponentIncludingDisabled(b, "ParticleEmitterComponent", "matter_maker") or {}))
+		-- the player is pinned in the air, so the flight is through open air until the bolt hits something
+		if d > 40 then
+			path[#path + 1] = { x, y }
+		end
+		wait(1)
+	end
+	wait(5)
+	-- the last points are where the bolt hit: that terrain was there before
+	for _ = 1, 2 do
+		path[#path] = nil
+	end
+	local solid = 0
+	for i = 1, #path - 1 do
+		local x, y = path[i][1], path[i][2]
+		if RaytraceSurfaces(x - 3, y - 3, x + 3, y + 3) then
+			solid = solid + 1
+		end
+	end
+	result("O20 flipped Matter eater leaves rock", script20 and eaters == 0 and #path > 2 and solid >= (#path - 1) / 2,
+		"script=" .. tostring(script20), "CellEaterComponents=" .. eaters, "rock emitters=" .. emitters,
+		"path points with rock=" .. solid .. "/" .. math.max(0, #path - 1))
+	quiet_cleanup()
 end
 
 -- Random modifier: whatever it picks must come out exactly like the sweep's flipped cast of that modifier
@@ -896,32 +1297,6 @@ end
 
 -- Field Imbue together with Sign flip ("fi" / "fi-first" suites: Field Imbue loaded after / before sign_flip) -------
 
-local function vsc_str(e, name)
-	for _, v in ipairs(EntityGetComponentIncludingDisabled(e, "VariableStorageComponent") or {}) do
-		if ComponentGetValue2(v, "name") == name then
-			return ComponentGetValue2(v, "value_string")
-		end
-	end
-	return nil -- explicit: tostring() with zero arguments throws
-end
-
-local function wait_new(snap, pattern, max_frames)
-	for _ = 1, max_frames do
-		for _, tag in ipairs(PROJ_TAGS) do
-			for _, e in ipairs(EntityGetWithTag(tag)) do
-				if not snap[e] then
-					snap[e] = true
-					if (EntityGetFilename(e) or ""):find(pattern, 1, true) then
-						return e
-					end
-				end
-			end
-		end
-		wait(1)
-	end
-	return nil
-end
-
 -- casts `cards` (ending in Circle of fervour) and parks the field in the bolt path; returns the field and its payload
 local function cast_field(cards)
 	equip(cards)
@@ -969,7 +1344,7 @@ local function run_fi()
 		{ "F1 flipped Damage plus field heals", { "FIELD_IMBUE", "SIGN_FLIP", "DAMAGE", "BERSERK_FIELD" }, "-DAMAGE", 0.12, -0.4 },
 		{ "F2 plain Damage plus field", { "FIELD_IMBUE", "DAMAGE", "BERSERK_FIELD" }, "DAMAGE", 0.52, 0 },
 		{ "F3 flipped and plain Damage plus", { "FIELD_IMBUE", "SIGN_FLIP", "DAMAGE", "DAMAGE", "BERSERK_FIELD" }, "-DAMAGE,DAMAGE", 0.52, -0.4 },
-		{ "F5 flip wasted on Light", { "FIELD_IMBUE", "SIGN_FLIP", "LIGHT", "BERSERK_FIELD" }, "LIGHT" },
+		{ "F5 flipped Light field (darkness)", { "FIELD_IMBUE", "SIGN_FLIP", "LIGHT", "BERSERK_FIELD" }, "-LIGHT" },
 		{ "F7 flipped Homing field", { "FIELD_IMBUE", "SIGN_FLIP", "HOMING", "BERSERK_FIELD" }, "-HOMING" },
 	}
 	for _, case in ipairs(cases) do
@@ -1104,6 +1479,7 @@ local function run_all()
 		if next(ONLY) == nil then
 			run_semantics()
 			run_opposites()
+			run_parts()
 			run_random()
 			run_economy()
 			run_behaviour()

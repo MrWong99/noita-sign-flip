@@ -1,0 +1,8 @@
+<!-- The opposite of data/entities/misc/hitfx_explode_explosion.xml, the blast a slimy / drunk target sets off
+     when hit: the same projectile with the implode marker, so implode_lib.lua turns it into an implosion where the
+     blast would have been (pull within 1.5x its radius, then 3x its damage in 1/3 of it). A unique child of the
+     target, loaded by files/entities/hitfx_implode_slime.xml / hitfx_implode_alcohol.xml. -->
+<Entity>
+	<Base file="data/entities/misc/hitfx_explode_explosion.xml" />
+	<Base file="mods/sign_flip/files/entities/implode.xml" />
+</Entity>

@@ -1,0 +1,8 @@
+<!-- Loaded onto a target hit by a flipped Curse; the opposite of data/entities/misc/curse_init.xml. Starts or stacks
+     the blessing (files/scripts/hitfx_bless_init.lua) and removes itself. -->
+<Entity>
+	<LuaComponent
+		script_source_file="mods/sign_flip/files/scripts/hitfx_bless_init.lua"
+		execute_every_n_frame="1" >
+	</LuaComponent>
+</Entity>

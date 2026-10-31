@@ -1,0 +1,8 @@
+<!-- A flipped Melee curse (data/entities/misc/hitfx_curse_wither_melee.xml): the hit target resists melee damage
+     instead of taking more (files/entities/hitfx_ward_melee_effect.xml). -->
+<Entity>
+	<HitEffectComponent
+		effect_hit="LOAD_UNIQUE_CHILD_ENTITY"
+		value_string="mods/sign_flip/files/entities/hitfx_ward_melee_effect.xml" >
+	</HitEffectComponent>
+</Entity>

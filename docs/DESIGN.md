@@ -110,18 +110,19 @@ entities and trail materials each modifier adds and writes `gen/opposites.lua` p
 
 | Kind | Rule | Vanilla result |
 |---|---|---|
-| Homing | `HomingComponent.homing_targeting_coeff` negated | Homing +130 → −130, which is vanilla's own Anti homing. Short-range, Accelerating, Boomerang (`target_who_shot`: flies away from you) and Homing-to-wand get the same; Anti homing → Homing. Rotate homing only turns (no strength to flip); Auto-aim and Cursor homing are scripts: no opposite. |
+| Homing | `HomingComponent.homing_targeting_coeff` negated | Homing +130 → −130, which is vanilla's own Anti homing. Short-range, Accelerating and Homing-to-wand get the same (Boomerang: see Pairs); Anti homing → Homing. Rotate homing only turns (no strength to flip); Auto-aim and Cursor homing are scripts: no opposite. |
 | Converters | `from_material` ↔ `to_material`. A converter that can't run backwards (a material group via `from_material_tag`, or one waiting for a script) stays as it is; later converters from the same new source are dropped | Water to poison → poison to water, Blood to acid → acid to blood, Lava to blood → blood to **lava**, Toxic sludge to acid → acid to toxic sludge, Freeze charge's water → static ice becomes static ice → water. Static to sand (`[solid]`), Liquid to explosion (`[liquid_common]`) and Transmutation have no opposite. |
 | Trails | trail material removed, a small converter "material → air" rides on the projectile instead, and the modifier's on-hit effect is dropped. Fire eaters also carry vanilla's `extinguish_fire` converter (as Ice ball does), because burning grass or wood stays its own material | Fire, Water, Oil, Acid, Poison, Gunpowder and Rainbow trail |
 | Poured material | an extra entity whose particle emitter makes real material is replaced by the same eater, on-hit effect dropped | Burning trail (`burn.xml`, real fire) → eats fire |
-| Pairs | swapped by file | Fly upwards ↔ Fly downwards, Larpa upwards ↔ Larpa downwards |
+| Pairs | swapped by file | Fly upwards ↔ Fly downwards, Larpa upwards ↔ Larpa downwards. This mod's own (decided with the user): Light → `files/entities/darkness.xml`, a soft black circle (alpha 0.92, Light's size) drawn over the world like an unlit cave, cosmetic like Light; Boomerang → `files/entities/repel_players.xml`, a slight anti homing (`files/scripts/repel_players.lua`: within 150 px of any `player_unit`, `polymorphed_player` or `ew_peer`, turns at most 8 % of the speed per frame, speed kept) instead of a −30 homing on the shooter only |
+| Own pairs | swapped by file (`PAIRS`), decided with the user | Colours: Red ↔ Green, Orange ↔ Blue, Yellow ↔ Purple, Rainbow ↔ Invisible (vanilla files, which differ only in `colour_name`; the `tinyspark_red` trail stays and is recoloured). Rocket downwards → `rocket_upwards.xml` (mirror: once `vel_y < −10`, five rockets fanned upwards with gravity −200). Laser emitter wider → `laser_emitter_narrower.xml` (−2 radius, −0.025 damage, −36 length once; floors 1.0 / 0.01 / 16). Critical on wet/oil/blood/burning → `hitfx_critical_not_*.xml` (an unconditional `CRITICAL_HIT_BOOST` that a per-frame script sets to 0 when the creature 2 frames ahead has the effect, else 100). Explosive slime/alcohol (giga) → `hitfx_implode_*.xml` (same condition, the child is vanilla's blast plus the unfiltered implode marker). Toxic charm → `hitfx_toxic_berserk.xml` (RADIOACTIVE target gets BERSERK for 3600 frames). Matter eater → `matter_maker.xml` (three 1 px `rock_static` trail emitters 6 px behind the projectile, removed within 20 px of players / 10 px of creatures, 200 frames). Crumbling earth → `solidify_earth.xml` (on removal, a 64 px converter: loose powders → their static form). Area damage → `area_heal.xml` (+0.14 hp per frame within 16 px, direct `hp` write up to `max_hp`, owner peer only). Curse → `hitfx_bless.xml` (+0.08 hp per 30 frames for 300, stacks and restarts like the curse, owner peer only). Wither curses → `hitfx_ward_*.xml` (multiplier −min(0.25, m) for 300 frames, the exact amount restored on removal). Remove bounce → `double_bounce.xml` (once: own bounces `bounces_left − config.bounces` doubled, at least 1; the shot's bounces double through the number flip) |
 | Includes | `<Base file="...">` pointing at a file with something to flip is pointed at that file's flipped version (up to 4 levels) | none in vanilla; for modded entities |
 
 At cast time the wrapper replaces whatever the flipped modifier appended to `extra_entities` and `trail_material`, in
 the same phases as the numbers. A cancelled flip (`Sign flip → Sign flip → Homing`) leaves Homing alone.
 
-**Everything else is used up:** curses, critical-on-X hit effects, orbits, rays, arcs, Light, Matter eater, and so on.
-The colour modifiers' only number is a cast-delay bonus, which does flip. Per-modifier list:
+**Everything else is used up:** Petrify, orbits, rays, arcs, Rotate / Auto-aim / Cursor homing, and so on. Per-modifier
+list:
 [modifier-flips.md](modifier-flips.md).
 
 ## 4. Field Imbue integration (Field Imbue 0.3.0)
@@ -232,3 +233,9 @@ gap-finders for packaging, docs and tooling.
 - Not flipped: `lightning_count` (Electric charge's arcs), Firecrackers' `material`.
 - Not watched in game yet: burning material being put out (the component is vanilla's, and the probe checks it is
   there). It is on the two-player checklist.
+- Own pairs (§3), until the probe has run them (O7–O20): critical-on-not-X picks its target with a 2-frame lookahead
+  (fast or piercing projectiles, big bosses can get the wrong decision); the hitfx implosions need `implode.xml`'s claim
+  to run before the lifetime-0 blast dies (else the vanilla blast happens); Remove bounce's double relies on the engine
+  having added `config.bounces` into `bounces_left` before the first update; Matter maker's rock trail
+  (`create_real_particles` + `is_trail`) has no vanilla precedent. Area heal (210 hp/s as the UI counts) and the 60 s
+  berserk may need balancing.

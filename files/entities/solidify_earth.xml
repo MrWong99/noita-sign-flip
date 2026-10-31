@@ -1,0 +1,10 @@
+<!-- A flipped Crumbling earth (data/entities/misc/crumbling_earth_projectile.xml): where the projectile ends, loose
+     ground hardens instead of crumbling. files/scripts/solidify_earth.lua leaves files/entities/solidify_earth_burst.xml
+     behind, as vanilla leaves data/entities/misc/loose_chunks_projectile.xml. -->
+<Entity>
+	<LuaComponent
+		script_source_file="mods/sign_flip/files/scripts/solidify_earth.lua"
+		execute_every_n_frame="-1"
+		execute_on_removed="1" >
+	</LuaComponent>
+</Entity>

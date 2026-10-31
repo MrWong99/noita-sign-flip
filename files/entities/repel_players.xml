@@ -1,0 +1,8 @@
+<!-- A flipped Boomerang (data/entities/misc/homing_shooter.xml): instead of coming back to you, the projectile gently
+     veers away from every player near it (files/scripts/repel_players.lua). -->
+<Entity>
+	<LuaComponent
+		script_source_file="mods/sign_flip/files/scripts/repel_players.lua"
+		execute_every_n_frame="1" >
+	</LuaComponent>
+</Entity>

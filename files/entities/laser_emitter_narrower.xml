@@ -1,0 +1,9 @@
+<!-- A flipped Laser Emitter Wider (data/entities/misc/laser_emitter_wider.xml): on the first frame the projectile's
+     laser beams get thinner, weaker and shorter by the same steps wider adds. -->
+<Entity>
+	<LuaComponent
+		script_source_file="mods/sign_flip/files/scripts/laser_emitter_narrower.lua"
+		execute_every_n_frame="1"
+		remove_after_executed="1" >
+	</LuaComponent>
+</Entity>
