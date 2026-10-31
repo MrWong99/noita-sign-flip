@@ -23,7 +23,7 @@ numbers depend on the frame and on the wand's mana; they flip like any other).
 | `SLOW_BUT_STEADY` | `recharge +70 → +70` · `recoil -80 → +80` |
 | `EXPLOSION_REMOVE` | `damage_explosion_add -0.8 → +0.8` · `explosion_radius -30 → +30` · `cast_delay -15 → +15` |
 | `EXPLOSION_TINY` | `damage_explosion_add +0.8 → -0.8` · `explosion_radius -30 → +30` · `cast_delay +15 → +15` |
-| `LASER_EMITTER_WIDER` | nothing to flip (wasted) |
+| `LASER_EMITTER_WIDER` | `parts=mods/sign_flip/files/entities/laser_emitter_narrower.xml` |
 | `MANA_REDUCE` | `cast_delay +10 → +10` · `mana +30 → -30` |
 | `QUANTUM_SPLIT` | `cast_delay +5 → +5` |
 | `GRAVITY` | `gravity +600 → -600` |
@@ -42,13 +42,13 @@ numbers depend on the frame and on the wand's mana; they flip like any other).
 | `PHASING_ARC` | `lifetime_add +80 → -80` · `speed_multiplier x0.33 → x3.03` · `child_speed_multiplier x0.33 → x3.03` · `cast_delay -12 → +12` |
 | `TRUE_ORBIT` | `damage_projectile_add +0.1 → +0` · `lifetime_add +80 → -80` · `healing -0.1` · `cast_delay -20 → +20` |
 | `BOUNCE` | `bounces +10 → -10` |
-| `REMOVE_BOUNCE` | nothing to flip (wasted) |
+| `REMOVE_BOUNCE` | `parts=mods/sign_flip/files/entities/double_bounce.xml` |
 | `HOMING` | `parts=flipped homing.xml, tinyspark_white.xml` |
 | `ANTI_HOMING` | `cast_delay -20 → +20` · `parts=flipped anti_homing.xml, tinyspark_white.xml` |
 | `HOMING_WAND` | `parts=flipped homing_wand.xml, tinyspark_white.xml` |
 | `HOMING_SHORT` | `parts=flipped homing_short.xml, tinyspark_white_weak.xml` |
 | `HOMING_ROTATE` | nothing to flip (wasted) |
-| `HOMING_SHOOTER` | `parts=flipped homing_shooter.xml, tinyspark_white.xml` |
+| `HOMING_SHOOTER` | `parts=mods/sign_flip/files/entities/repel_players.xml, tinyspark_white.xml` |
 | `AUTOAIM` | nothing to flip (wasted) |
 | `HOMING_ACCELERATING` | `parts=flipped homing_accelerating.xml, tinyspark_white_small.xml` |
 | `HOMING_CURSOR` | nothing to flip (wasted) |
@@ -58,7 +58,7 @@ numbers depend on the frame and on the wand's mana; they flip like any other).
 | `DAMAGE` | `damage_projectile_add +0.4 → +0` · `healing -0.4` · `cast_delay +5 → +5` · `recoil +10 → -10` |
 | `BLOODLUST` | `damage_projectile_add +1.3 → +0` · `spread_degrees +6 → -6` · `healing -1.3` · `cast_delay +8 → +8` · `recoil +30 → -30` |
 | `CRITICAL_HIT` | `damage_critical_chance +15 → -15` |
-| `AREA_DAMAGE` | nothing to flip (wasted) |
+| `AREA_DAMAGE` | `parts=mods/sign_flip/files/entities/area_heal.xml` |
 | `SPELLS_TO_POWER` | `cast_delay +40 → +40` |
 | `ESSENCE_TO_POWER` | `cast_delay +20 → +20` |
 | `ZERO_DAMAGE` | `lifetime_add +280 → -280` · `cast_delay -5 → +5` · `recoil -10 → +10` |
@@ -81,21 +81,21 @@ numbers depend on the frame and on the wand's mana; they flip like any other).
 | `TRANSMUTATION` | `cast_delay +20 → +20` |
 | `RANDOM_EXPLOSION` | `cast_delay +40 → +40` |
 | `NECROMANCY` | `cast_delay +10 → +10` |
-| `LIGHT` | nothing to flip (wasted) |
+| `LIGHT` | `parts=mods/sign_flip/files/entities/darkness.xml` |
 | `ELECTRIC_CHARGE` | `damage_electricity_add +0.1 → +0` · `healing -0.1` |
-| `MATTER_EATER` | nothing to flip (wasted) |
+| `MATTER_EATER` | `parts=mods/sign_flip/files/entities/matter_maker.xml` |
 | `FREEZE` | `damage_ice_add +0.2 → +0` · `healing -0.2` · `parts=flipped freeze_charge.xml` |
-| `HITFX_BURNING_CRITICAL_HIT` | nothing to flip (wasted) |
-| `HITFX_CRITICAL_WATER` | nothing to flip (wasted) |
-| `HITFX_CRITICAL_OIL` | nothing to flip (wasted) |
-| `HITFX_CRITICAL_BLOOD` | nothing to flip (wasted) |
-| `HITFX_TOXIC_CHARM` | nothing to flip (wasted) |
-| `HITFX_EXPLOSION_SLIME` | nothing to flip (wasted) |
-| `HITFX_EXPLOSION_SLIME_GIGA` | nothing to flip (wasted) |
-| `HITFX_EXPLOSION_ALCOHOL` | nothing to flip (wasted) |
-| `HITFX_EXPLOSION_ALCOHOL_GIGA` | nothing to flip (wasted) |
+| `HITFX_BURNING_CRITICAL_HIT` | `parts=mods/sign_flip/files/entities/hitfx_critical_not_burning.xml` |
+| `HITFX_CRITICAL_WATER` | `parts=mods/sign_flip/files/entities/hitfx_critical_not_water.xml` |
+| `HITFX_CRITICAL_OIL` | `parts=mods/sign_flip/files/entities/hitfx_critical_not_oil.xml` |
+| `HITFX_CRITICAL_BLOOD` | `parts=mods/sign_flip/files/entities/hitfx_critical_not_blood.xml` |
+| `HITFX_TOXIC_CHARM` | `parts=mods/sign_flip/files/entities/hitfx_toxic_berserk.xml` |
+| `HITFX_EXPLOSION_SLIME` | `parts=mods/sign_flip/files/entities/hitfx_implode_slime.xml` |
+| `HITFX_EXPLOSION_SLIME_GIGA` | `parts=mods/sign_flip/files/entities/hitfx_implode_slime_giga.xml, tinyspark_purple.xml` |
+| `HITFX_EXPLOSION_ALCOHOL` | `parts=mods/sign_flip/files/entities/hitfx_implode_alcohol.xml` |
+| `HITFX_EXPLOSION_ALCOHOL_GIGA` | `parts=mods/sign_flip/files/entities/hitfx_implode_alcohol_giga.xml, tinyspark_orange.xml` |
 | `HITFX_PETRIFY` | nothing to flip (wasted) |
-| `ROCKET_DOWNWARDS` | `cast_delay +25 → +25` |
+| `ROCKET_DOWNWARDS` | `cast_delay +25 → +25` · `parts=mods/sign_flip/files/entities/rocket_upwards.xml` |
 | `ROCKET_OCTAGON` | `cast_delay +20 → +20` |
 | `FIZZLE` | `speed_multiplier x1.2 → x0.8333` · `cast_delay -10 → +10` |
 | `BOUNCE_EXPLOSION` | `bounces +1 → -1` · `cast_delay +25 → +25` · `recoil +20 → -20` |
@@ -115,11 +115,11 @@ numbers depend on the frame and on the wand's mana; they flip like any other).
 | `LIGHTNING_RAY_ENEMY` | nothing to flip (wasted) |
 | `TENTACLE_RAY_ENEMY` | nothing to flip (wasted) |
 | `GRAVITY_FIELD_ENEMY` | nothing to flip (wasted) |
-| `CURSE` | nothing to flip (wasted) |
-| `CURSE_WITHER_PROJECTILE` | nothing to flip (wasted) |
-| `CURSE_WITHER_EXPLOSION` | nothing to flip (wasted) |
-| `CURSE_WITHER_MELEE` | nothing to flip (wasted) |
-| `CURSE_WITHER_ELECTRICITY` | nothing to flip (wasted) |
+| `CURSE` | `parts=mods/sign_flip/files/entities/hitfx_bless.xml` |
+| `CURSE_WITHER_PROJECTILE` | `parts=mods/sign_flip/files/entities/hitfx_ward_projectile.xml` |
+| `CURSE_WITHER_EXPLOSION` | `parts=mods/sign_flip/files/entities/hitfx_ward_explosion.xml` |
+| `CURSE_WITHER_MELEE` | `parts=mods/sign_flip/files/entities/hitfx_ward_melee.xml` |
+| `CURSE_WITHER_ELECTRICITY` | `parts=mods/sign_flip/files/entities/hitfx_ward_electricity.xml` |
 | `ORBIT_DISCS` | nothing to flip (wasted) |
 | `ORBIT_FIREBALLS` | nothing to flip (wasted) |
 | `ORBIT_NUKES` | nothing to flip (wasted) |
@@ -130,7 +130,7 @@ numbers depend on the frame and on the wand's mana; they flip like any other).
 | `ARC_FIRE` | nothing to flip (wasted) |
 | `ARC_GUNPOWDER` | nothing to flip (wasted) |
 | `ARC_POISON` | nothing to flip (wasted) |
-| `CRUMBLING_EARTH_PROJECTILE` | nothing to flip (wasted) |
+| `CRUMBLING_EARTH_PROJECTILE` | `parts=mods/sign_flip/files/entities/solidify_earth.xml` |
 | `UNSTABLE_GUNPOWDER` | nothing to flip (wasted) |
 | `ACID_TRAIL` | `parts=eater of acid.xml` · `no trail` |
 | `POISON_TRAIL` | `parts=eater of poison.xml` · `no trail` · `no on-hit effect` |
@@ -145,12 +145,12 @@ numbers depend on the frame and on the wand's mana; they flip like any other).
 | `LARPA_UPWARDS` | `cast_delay +15 → +15` · `parts=larpa_downwards.xml` |
 | `LARPA_CHAOS_2` | `cast_delay +20 → +20` |
 | `LARPA_DEATH` | `cast_delay +15 → +15` |
-| `COLOUR_RED` | `cast_delay -8 → +8` |
-| `COLOUR_ORANGE` | `cast_delay -8 → +8` |
-| `COLOUR_GREEN` | `cast_delay -8 → +8` |
-| `COLOUR_YELLOW` | `cast_delay -8 → +8` |
-| `COLOUR_PURPLE` | `cast_delay -8 → +8` |
-| `COLOUR_BLUE` | `cast_delay -8 → +8` |
-| `COLOUR_RAINBOW` | `cast_delay -8 → +8` |
-| `COLOUR_INVIS` | `cast_delay -8 → +8` |
+| `COLOUR_RED` | `cast_delay -8 → +8` · `parts=tinyspark_red.xml, colour_green.xml` |
+| `COLOUR_ORANGE` | `cast_delay -8 → +8` · `parts=tinyspark_red.xml, colour_blue.xml` |
+| `COLOUR_GREEN` | `cast_delay -8 → +8` · `parts=tinyspark_red.xml, colour_red.xml` |
+| `COLOUR_YELLOW` | `cast_delay -8 → +8` · `parts=tinyspark_red.xml, colour_purple.xml` |
+| `COLOUR_PURPLE` | `cast_delay -8 → +8` · `parts=tinyspark_red.xml, colour_yellow.xml` |
+| `COLOUR_BLUE` | `cast_delay -8 → +8` · `parts=tinyspark_red.xml, colour_orange.xml` |
+| `COLOUR_RAINBOW` | `cast_delay -8 → +8` · `parts=tinyspark_red.xml, colour_invis.xml` |
+| `COLOUR_INVIS` | `cast_delay -8 → +8` · `parts=colour_rainbow.xml` |
 | `RAINBOW_TRAIL` | `parts=eater of material_rainbow.xml` · `no trail` · `no on-hit effect` |

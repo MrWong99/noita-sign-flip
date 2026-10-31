@@ -16,6 +16,48 @@ local PAIRS = {
 	["data/entities/misc/fly_downwards.xml"] = "data/entities/misc/fly_upwards.xml",
 	["data/entities/misc/larpa_upwards.xml"] = "data/entities/misc/larpa_downwards.xml",
 	["data/entities/misc/larpa_downwards.xml"] = "data/entities/misc/larpa_upwards.xml",
+	-- this mod's own opposites (decided with the user): Light carries darkness, and Boomerang, instead of turning away
+	-- from you at full homing strength, veers slightly away from every player
+	["data/entities/misc/light.xml"] = "mods/sign_flip/files/entities/darkness.xml",
+	["data/entities/misc/homing_shooter.xml"] = "mods/sign_flip/files/entities/repel_players.xml",
+	-- colours turn complementary: only the colour_name in these files differs
+	["data/entities/misc/colour_red.xml"] = "data/entities/misc/colour_green.xml",
+	["data/entities/misc/colour_green.xml"] = "data/entities/misc/colour_red.xml",
+	["data/entities/misc/colour_orange.xml"] = "data/entities/misc/colour_blue.xml",
+	["data/entities/misc/colour_blue.xml"] = "data/entities/misc/colour_orange.xml",
+	["data/entities/misc/colour_yellow.xml"] = "data/entities/misc/colour_purple.xml",
+	["data/entities/misc/colour_purple.xml"] = "data/entities/misc/colour_yellow.xml",
+	["data/entities/misc/colour_rainbow.xml"] = "data/entities/misc/colour_invis.xml",
+	["data/entities/misc/colour_invis.xml"] = "data/entities/misc/colour_rainbow.xml",
+	-- Rocket downwards bursts into rockets flying up once the projectile rises
+	["data/entities/misc/rocket_downwards.xml"] = "mods/sign_flip/files/entities/rocket_upwards.xml",
+	-- Laser emitter wider: thinner, weaker, shorter beams
+	["data/entities/misc/laser_emitter_wider.xml"] = "mods/sign_flip/files/entities/laser_emitter_narrower.xml",
+	-- critical on wet / oiled / bloody / burning: critical on targets that are not
+	["data/entities/misc/hitfx_critical_water.xml"] = "mods/sign_flip/files/entities/hitfx_critical_not_water.xml",
+	["data/entities/misc/hitfx_critical_oil.xml"] = "mods/sign_flip/files/entities/hitfx_critical_not_oil.xml",
+	["data/entities/misc/hitfx_critical_blood.xml"] = "mods/sign_flip/files/entities/hitfx_critical_not_blood.xml",
+	["data/entities/misc/hitfx_burning_critical_hit.xml"] = "mods/sign_flip/files/entities/hitfx_critical_not_burning.xml",
+	-- explosive slime / alcohol on hit: the target implodes
+	["data/entities/misc/hitfx_explode_slime.xml"] = "mods/sign_flip/files/entities/hitfx_implode_slime.xml",
+	["data/entities/misc/hitfx_explode_slime_giga.xml"] = "mods/sign_flip/files/entities/hitfx_implode_slime_giga.xml",
+	["data/entities/misc/hitfx_explode_alcohol.xml"] = "mods/sign_flip/files/entities/hitfx_implode_alcohol.xml",
+	["data/entities/misc/hitfx_explode_alcohol_giga.xml"] = "mods/sign_flip/files/entities/hitfx_implode_alcohol_giga.xml",
+	-- Toxic charm: toxic targets go berserk
+	["data/entities/misc/hitfx_toxic_charm.xml"] = "mods/sign_flip/files/entities/hitfx_toxic_berserk.xml",
+	-- Matter eater leaves a rock bridge, Crumbling earth hardens loose ground
+	["data/entities/misc/matter_eater.xml"] = "mods/sign_flip/files/entities/matter_maker.xml",
+	["data/entities/misc/crumbling_earth_projectile.xml"] = "mods/sign_flip/files/entities/solidify_earth.xml",
+	-- Area damage heals
+	["data/entities/misc/area_damage.xml"] = "mods/sign_flip/files/entities/area_heal.xml",
+	-- Curse blesses (heal over time); the wither curses ward: the target resists that damage type
+	["data/entities/misc/hitfx_curse.xml"] = "mods/sign_flip/files/entities/hitfx_bless.xml",
+	["data/entities/misc/hitfx_curse_wither_projectile.xml"] = "mods/sign_flip/files/entities/hitfx_ward_projectile.xml",
+	["data/entities/misc/hitfx_curse_wither_explosion.xml"] = "mods/sign_flip/files/entities/hitfx_ward_explosion.xml",
+	["data/entities/misc/hitfx_curse_wither_melee.xml"] = "mods/sign_flip/files/entities/hitfx_ward_melee.xml",
+	["data/entities/misc/hitfx_curse_wither_electricity.xml"] = "mods/sign_flip/files/entities/hitfx_ward_electricity.xml",
+	-- Remove bounce doubles the projectile's own bounces
+	["data/entities/misc/remove_bounce.xml"] = "mods/sign_flip/files/entities/double_bounce.xml",
 }
 
 -- The spell flip (files/gun_append.lua, run_spell_flipped): Black hole <-> White hole, as files. Each pair differs only

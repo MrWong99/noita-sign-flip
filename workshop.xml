@@ -9,9 +9,12 @@
 [*]Sign flip -> Homing: the bolt steers away from enemies
 [*]Sign flip -> Water to poison: turns poison into water. Fire trail: takes fire away and puts out what burns
 [*]Sign flip -> Sign flip -> Damage plus: two flips cancel out
+[*]Sign flip -> Light: a cloud of darkness. Boomerang: veers away from players. Colours: the complementary colour
+[*]Sign flip -> Matter eater: leaves a rock bridge. Area damage: a healing aura. Curse: a blessing. Wither curses: wards
+[*]Sign flip -> Critical on wet: crits targets that are NOT wet. Explosive slime: the target implodes. Toxic charm: berserk. Remove bounce: double bounces
 [*]Sign flip -> Black hole: a White hole. Sign flip -> Bomb, or Sign flip -> Explosive projectile: an implosion - it pulls things in, then explodes with 3x the damage in a third of the radius
 [/list]
-It flips the next modifier in the same cast (or the spell right after it), also through multicasts, as an always-cast and when Random modifier picks it. A modifier with nothing to flip (curses, orbits, Light, ...) uses the flip up. Works with every vanilla modifier and with other mods' modifiers. Full list: https://github.com/MrWong99/noita-sign-flip/blob/main/docs/modifier-flips.md
+It flips the next modifier in the same cast (or the spell right after it), also through multicasts, as an always-cast and when Random modifier picks it. A modifier with nothing to flip (orbits, rays, arcs, ...) uses the flip up. Works with every vanilla modifier and with other mods' modifiers. Full list: https://github.com/MrWong99/noita-sign-flip/blob/main/docs/modifier-flips.md
 
 [b]Setting[/b] (applies from the next new run): Flip cast delay, recharge and mana - Bonuses only (default), Everything, or Never.
 

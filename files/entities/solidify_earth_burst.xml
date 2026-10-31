@@ -1,0 +1,18 @@
+<!-- The opposite of data/entities/misc/loose_chunks_projectile.xml, left where a flipped Crumbling earth projectile
+     ends (files/scripts/solidify_earth.lua): powders that have a static form set into it, in a circle growing to a bit
+     less than the reach of the crumbling (96 px). Every peer converts the same cells, like vanilla's converters. -->
+<Entity>
+	<MagicConvertMaterialComponent
+		from_material_array="sand,sand_surface,lavasand,soil,snow,snow_sticky,coal,bone,concrete_sand"
+		to_material_array="sand_static,sand_static,lavarock_static,rock_static,snow_static,snow_static,coal_static,bone_static,concrete_static"
+		convert_same_material="0"
+		kill_when_finished="1"
+		steps_per_frame="4"
+		is_circle="1"
+		radius="64" >
+	</MagicConvertMaterialComponent>
+
+	<LifetimeComponent
+		lifetime="60" >
+	</LifetimeComponent>
+</Entity>

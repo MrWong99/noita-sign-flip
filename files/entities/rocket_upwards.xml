@@ -1,0 +1,8 @@
+<!-- A flipped Rocket Downwards (data/entities/misc/rocket_downwards.xml): once the projectile flies upwards it bursts
+     into five rockets that fly up (files/scripts/rocket_upwards.lua). -->
+<Entity>
+	<LuaComponent
+		script_source_file="mods/sign_flip/files/scripts/rocket_upwards.lua"
+		execute_every_n_frame="3" >
+	</LuaComponent>
+</Entity>

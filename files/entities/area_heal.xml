@@ -1,0 +1,27 @@
+<!-- A flipped Area damage (data/entities/misc/area_damage.xml): instead of hurting creatures near it, the projectile
+     heals every creature within 16 px by Area damage's 0.14 per frame, up to max hp (files/scripts/area_heal.lua): players,
+     Entangled Worlds' other players and enemies alike. A ring of green sparks instead of the purple marker. -->
+<Entity>
+	<LuaComponent
+		script_source_file="mods/sign_flip/files/scripts/area_heal.lua"
+		execute_every_n_frame="1" >
+	</LuaComponent>
+
+	<ParticleEmitterComponent
+		emitted_material_name="spark_green"
+		gravity.y="0.0"
+		lifetime_min="0.2"
+		lifetime_max="0.5"
+		count_min="1"
+		count_max="2"
+		render_on_grid="1"
+		fade_based_on_lifetime="1"
+		area_circle_radius.min="14"
+		area_circle_radius.max="16"
+		cosmetic_force_create="0"
+		emission_interval_min_frames="1"
+		emission_interval_max_frames="1"
+		emit_cosmetic_particles="1"
+		is_emitting="1" >
+	</ParticleEmitterComponent>
+</Entity>

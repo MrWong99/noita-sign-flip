@@ -1,0 +1,10 @@
+<!-- A flipped Matter eater (data/entities/misc/matter_eater.xml): instead of eating the terrain around it, the
+     projectile leaves a thin trail of rock behind it, a bridge you can stand on. The rock is laid by a particle emitter
+     (files/entities/matter_maker_emitter.xml) that files/scripts/matter_maker.lua adds and removes, so that no rock is
+     made near players or creatures. -->
+<Entity>
+	<LuaComponent
+		script_source_file="mods/sign_flip/files/scripts/matter_maker.lua"
+		execute_every_n_frame="1" >
+	</LuaComponent>
+</Entity>

@@ -1,0 +1,9 @@
+<!-- A flipped Toxic Charm (data/entities/misc/hitfx_toxic_charm.xml): a toxic (RADIOACTIVE) target that is hit goes
+     berserk and attacks everything near it instead of joining you. Same condition and duration as the charm. -->
+<Entity>
+	<HitEffectComponent
+		condition_status="RADIOACTIVE"
+		effect_hit="LOAD_UNIQUE_GAME_EFFECT"
+		value_string="mods/sign_flip/files/entities/hitfx_toxic_berserk_effect.xml" >
+	</HitEffectComponent>
+</Entity>

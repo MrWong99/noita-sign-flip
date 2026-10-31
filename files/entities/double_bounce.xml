@@ -1,0 +1,10 @@
+<!-- A flipped Remove bounce (data/entities/misc/remove_bounce.xml): instead of losing every bounce, the projectile's own
+     bounces are doubled when it spawns, and one that had none gets one (files/scripts/double_bounce.lua). The bounces
+     the shot added are doubled by the number flip already. -->
+<Entity>
+	<LuaComponent
+		script_source_file="mods/sign_flip/files/scripts/double_bounce.lua"
+		execute_every_n_frame="1"
+		remove_after_executed="1" >
+	</LuaComponent>
+</Entity>

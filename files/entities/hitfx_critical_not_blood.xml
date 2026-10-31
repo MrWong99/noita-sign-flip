@@ -1,0 +1,14 @@
+<!-- A flipped data/entities/misc/hitfx_critical_blood.xml: hits are critical against targets that are NOT bloody. The boost is armed or
+     disarmed per target by files/scripts/hitfx_critical_not_blood.lua. -->
+<Entity>
+	<HitEffectComponent
+		_tags="hitfx_critical_not_BLOODY"
+		effect_hit="CRITICAL_HIT_BOOST"
+		value="100" >
+	</HitEffectComponent>
+
+	<LuaComponent
+		script_source_file="mods/sign_flip/files/scripts/hitfx_critical_not_blood.lua"
+		execute_every_n_frame="1" >
+	</LuaComponent>
+</Entity>

@@ -42,7 +42,7 @@ A Noita mod that adds **Sign flip**, a modifier card that negates the next modif
   within 1.5× its explosion radius are pulled in for 0.25 s (no terrain is eaten), then it explodes with 3× the
   damage in ⅓ of the radius. That is a flipped spell's own explosion, and a flipped Explosive projectile or Clustermod
   (every projectile of that cast). A flipped Remove explosion or Explosive tiny makes the explosion bigger instead.
-- **Nothing to flip.** A next modifier with nothing to flip (curses, orbits, Light, …) uses the flip up.
+- **Nothing to flip.** A next modifier with nothing to flip (orbits, rays, arcs, …) uses the flip up.
 - **Numbers.** Numbers a modifier adds are negated. Numbers it multiplies get the reciprocal factor.
 - **Healing.** Damage that a flip takes away **heals** instead. The engine ignores negative damage, so it goes to the
   healing type, like vanilla's Healing bolt. It heals what the bolt hits; explosion damage can't heal (a negative
@@ -52,8 +52,23 @@ A Noita mod that adds **Sign flip**, a modifier card that negates the next modif
   - a flipped drain never takes the wand below 0;
   - a flip never gives back more mana than the cast started with.
 - **Parts flip too.** What a modifier adds to the projectile is flipped as well:
-  - **Homing ↔ anti homing:** the sign of the homing strength. Covers Homing, Short-range, Accelerating, Boomerang and
-    Homing to wands. Rotate, Auto-aim and Cursor homing have no strength to flip.
+  - **Homing ↔ anti homing:** the sign of the homing strength. Covers Homing, Short-range, Accelerating and Homing to
+    wands. Rotate, Auto-aim and Cursor homing have no strength to flip.
+  - **Boomerang** doesn't come back: the projectile veers slightly away from every player near it (all of them in
+    Entangled Worlds).
+  - **Light → darkness:** the projectile carries a cloud of darkness instead of light, like an unlit cave.
+  - **Colours** turn complementary: Red ↔ Green, Orange ↔ Blue, Yellow ↔ Purple, Rainbow ↔ Invisible.
+  - **Rocket downwards** bursts into five rockets flying **up** once the projectile rises.
+  - **Laser emitter wider** makes the beams **narrower**, weaker and shorter by the same steps.
+  - **Critical on wet / oiled / bloody / burning** crits targets that are **not** wet / oiled / bloody / burning.
+  - **Explosive slime / alcohol** (and giga) make the slimy or drunk target **implode** instead.
+  - **Toxic charm** drives a toxic target **berserk** for the charm's 60 s instead.
+  - **Matter eater** leaves a thin **rock bridge** behind the projectile (never next to a player or creature).
+  - **Crumbling earth** hardens loose ground where the projectile ends: sand, soil, snow, coal, bone → static.
+  - **Area damage** heals every creature near the projectile by the damage it would deal, up to max hp.
+  - **Curse → blessing:** the target heals over time as much as the curse would hurt, stacking the same way.
+    **Wither curses → wards:** the target takes 25 % less of that damage type for 5 s.
+  - **Remove bounce** doubles bounces instead (a projectile without bounces of its own gets one).
   - **Converters run backwards** when they turn one material into another: Water to poison, Blood to acid, Lava to
     blood, Toxic sludge to acid, Freeze charge's freezing. Converters of whole material groups (Static to sand, Liquid
     to explosion) and Transmutation can't.

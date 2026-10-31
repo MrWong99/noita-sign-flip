@@ -1,0 +1,40 @@
+<!-- The melee ward on a target, the opposite of data/entities/misc/curse_wither_melee.xml: for 300 frames its melee
+     damage multiplier is 0.25 lower instead of 0.25 higher (files/scripts/hitfx_ward_start.lua, hitfx_ward_end.lua). -->
+<Entity>
+	<InheritTransformComponent />
+
+	<VariableStorageComponent
+		_tags="sf_ward_type"
+		value_string="melee" >
+	</VariableStorageComponent>
+
+	<VariableStorageComponent
+		_tags="sf_ward_delta"
+		value_float="0" >
+	</VariableStorageComponent>
+
+	<LuaComponent
+		script_source_file="mods/sign_flip/files/scripts/hitfx_ward_start.lua"
+		execute_every_n_frame="1"
+		remove_after_executed="1" >
+	</LuaComponent>
+
+	<LuaComponent
+		script_source_file="mods/sign_flip/files/scripts/hitfx_ward_end.lua"
+		execute_every_n_frame="-1"
+		execute_on_removed="1" >
+	</LuaComponent>
+
+	<LifetimeComponent
+		lifetime="300" >
+	</LifetimeComponent>
+
+	<UIIconComponent
+		icon_sprite_file="data/ui_gfx/status_indicators/protection_all.png"
+		name="Melee ward"
+		description="Takes less melee damage"
+		display_above_head="1"
+		display_in_hud="0"
+		is_perk="1" >
+	</UIIconComponent>
+</Entity>
