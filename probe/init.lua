@@ -1344,7 +1344,7 @@ local function run_fi()
 		{ "F1 flipped Damage plus field heals", { "FIELD_IMBUE", "SIGN_FLIP", "DAMAGE", "BERSERK_FIELD" }, "-DAMAGE", 0.12, -0.4 },
 		{ "F2 plain Damage plus field", { "FIELD_IMBUE", "DAMAGE", "BERSERK_FIELD" }, "DAMAGE", 0.52, 0 },
 		{ "F3 flipped and plain Damage plus", { "FIELD_IMBUE", "SIGN_FLIP", "DAMAGE", "DAMAGE", "BERSERK_FIELD" }, "-DAMAGE,DAMAGE", 0.52, -0.4 },
-		{ "F5 flip wasted on Light", { "FIELD_IMBUE", "SIGN_FLIP", "LIGHT", "BERSERK_FIELD" }, "LIGHT" },
+		{ "F5 flipped Light field (darkness)", { "FIELD_IMBUE", "SIGN_FLIP", "LIGHT", "BERSERK_FIELD" }, "-LIGHT" },
 		{ "F7 flipped Homing field", { "FIELD_IMBUE", "SIGN_FLIP", "HOMING", "BERSERK_FIELD" }, "-HOMING" },
 	}
 	for _, case in ipairs(cases) do
